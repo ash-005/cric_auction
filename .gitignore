@@ -1,0 +1,4 @@
+.venv
+team_data
+data_gen.py
+uploaded_player_data.csv
