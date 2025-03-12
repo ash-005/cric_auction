@@ -73,14 +73,16 @@ def load_players_from_csv(file_path='player_list.csv'):
             matches_played = int(skill + random.randint(5, 50))
             
             # Determine base price based on overall rating
-            if skill >= 86:
-                base_price = random.choice([3.0, 3.5, 4.0, 5.0])
+            if skill >= 91:
+                base_price = random.choice([4.5,5.0])
+            elif skill >= 86:
+                base_price = random.choice([3.0, 3.5, 4.0])
             elif skill >= 77:
-                base_price = random.choice([1.5, 1.75, 2.0, 2.5])
+                base_price = random.choice([1.5, 2.0, 2.5])
             elif skill >= 70:
-                base_price = random.choice([1.0, 1.25, 1.5])
+                base_price = random.choice([1.0, 1.5])
             elif skill >= 60:
-                base_price = random.choice([0.75, 1.0])
+                base_price = 1.0
             else:
                 base_price = 0.5
             
