@@ -35,7 +35,7 @@ if 'player_batches' not in st.session_state:
     st.session_state.player_batches = {}
 
 # Load player data from CSV - MODIFIED FOR NEW CSV FORMAT
-def load_players_from_csv(file_path='player_list.csv'):
+def load_players_from_csv(file_path='player_list_complete.csv'):
     """
     Load players from a CSV file with columns: Name, Overall, Role, Nationality
     """
