@@ -34,17 +34,16 @@ if 'last_bidder' not in st.session_state:
 if 'player_batches' not in st.session_state:
     st.session_state.player_batches = {}
 
-# Load player data from CSV
-def load_players_from_csv(file_path='player_data.csv'):
+# Load player data from CSV - MODIFIED FOR NEW CSV FORMAT
+def load_players_from_csv(file_path='player_list.csv'):
     """
-    Load players from a CSV file and organize them by role.
-    The CSV should have columns: name, base_price, position, skill_rating, country, experience
+    Load players from a CSV file with columns: Name, Overall, Role, Nationality
     """
     try:
         df = pd.read_csv(file_path)
         
-        # Ensure required columns exist
-        required_cols = ['name', 'base_price', 'position', 'skill_rating', 'country', 'experience']
+        # Check if required columns exist
+        required_cols = ['Name', 'Overall', 'Role', 'Nationality']
         missing_cols = [col for col in required_cols if col not in df.columns]
         
         if missing_cols:
@@ -55,29 +54,53 @@ def load_players_from_csv(file_path='player_data.csv'):
         players = []
         
         for _, row in df.iterrows():
-            # Generate random stats based on skill_rating
-            skill = float(row['skill_rating'])
+            # Generate random stats based on Overall rating
+            skill = float(row['Overall'])
             
-            # Determine batting and bowling averages based on position and skill rating
-            if row['position'].lower() in ['batsman', 'wicket-keeper']:
+            # Determine batting and bowling averages based on role and skill rating
+            role = row['Role'].strip().lower()
+            if role in ['batsman', 'wicket-keeper', 'batter', 'wicketkeeper']:
                 batting_avg = int(skill * 0.5 + random.uniform(15, 25))  # Higher batting avg for batsmen
                 bowling_avg = int((100 - skill) * 0.3 + random.uniform(25, 40))  # Lower bowling avg is better
-            elif row['position'].lower() == 'bowler':
+            elif role in ['bowler']:
                 batting_avg = int(skill * 0.2 + random.uniform(10, 20))  # Lower batting avg for bowlers
                 bowling_avg = int((100 - skill) * 0.4 + random.uniform(15, 25))  # Better bowling avg for bowlers
-            else:  # All-rounder
+            else:  # All-rounder or other
                 batting_avg = int(skill * 0.4 + random.uniform(15, 20))
                 bowling_avg = int((100 - skill) * 0.35 + random.uniform(20, 30))
             
-            # Calculate matches based on experience
-            matches_played = int(float(row['experience']) * 10 + random.randint(5, 15))
+            # Calculate matches based on skill (as a proxy for experience)
+            matches_played = int(skill + random.randint(5, 50))
+            
+            # Determine base price based on overall rating
+            if skill >= 86:
+                base_price = random.choice([3.0, 3.5, 4.0, 5.0])
+            elif skill >= 77:
+                base_price = random.choice([1.5, 1.75, 2.0,2.5])
+            elif skill >= 70:
+                base_price = random.choice([1.0, 1.25, 1.5])
+            else:
+                base_price = random.choice([0.5, 0.75, 1.0])
+            
+            # Standardize role names
+            if role in ['batsman', 'batter']:
+                standardized_role = 'Batsman'
+            elif role in ['bowler']:
+                standardized_role = 'Bowler'
+            elif role in ['all-rounder', 'allrounder', 'all rounder']:
+                standardized_role = 'All-rounder'
+            elif role in ['wicket-keeper', 'wicketkeeper', 'keeper']:
+                standardized_role = 'Wicket-keeper'
+            else:
+                standardized_role = 'All-rounder'  # Default case
             
             player = {
                 'id': str(uuid.uuid4()),
-                'name': row['name'],
-                'role': row['position'],  # Mapping position to role
-                'country': row['country'],
-                'base_price': float(row['base_price']),
+                'name': row['Name'],
+                'role': standardized_role,
+                'country': row['Nationality'],
+                'base_price': base_price,
+                'overall_rating': int(skill),  # Store the overall rating from CSV
                 'stats': {
                     'batting_avg': batting_avg,
                     'bowling_avg': bowling_avg,
@@ -102,17 +125,19 @@ def generate_sample_players():
     players = []
     # Generate sample player data
     for i in range(100):
+        skill_rating = random.randint(50, 95)
         player = {
             'id': str(uuid.uuid4()),
             'name': f"Player {i+1}",
             'role': random.choice(player_roles),
             'country': random.choice(player_countries),
             'base_price': random.choice([0.5, 0.75, 1.0, 1.5, 2.0]),  # Base price in crores
+            'overall_rating': skill_rating,  # Add overall rating
             'stats': {
                 'batting_avg': int(random.uniform(20, 60)),
                 'bowling_avg': int(random.uniform(18, 40)),
                 'matches_played': random.randint(10, 200),
-                'skill_rating': random.randint(50, 95)
+                'skill_rating': skill_rating
             },
             'status': 'unsold'
         }
@@ -268,10 +293,10 @@ def view_team_players(team):
             'Name': p['name'],
             'Role': p['role'],
             'Country': p['country'],
+            'Overall': p.get('overall_rating', p['stats']['skill_rating']),
             'Price': f"₹{p.get('sold_price', 0)} crores",
             'Batting Avg': p['stats']['batting_avg'],
-            'Bowling Avg': p['stats']['bowling_avg'],
-            'Skill Rating': p['stats']['skill_rating']
+            'Bowling Avg': p['stats']['bowling_avg']
         })
     
     st.dataframe(pd.DataFrame(player_data), use_container_width=True)
@@ -337,18 +362,21 @@ def auction_screen():
         auction_col, bid_col = st.columns([3, 1])  # Make auction details take more space
     
         with auction_col:
-            st.markdown(f"<h2 style='text-align: center; color: #ff4b4b;'>🎯 Now Auctioning: {player['name']}</h2>", unsafe_allow_html=True)
-            st.markdown(f"<h4 style='text-align: center;'>Role: {player['role']} | Country: {player['country']}</h4>", unsafe_allow_html=True)
+            #st.markdown(f"<h2 style='text-align: center; color: #ff4b4b;'>🎯 Now Auctioning: {player['name']}</h2>", unsafe_allow_html=True)
+            st.markdown(f"<h2 style='text-align: center; color: #ff4b4b;'>🎯 Now Auctioning:<span style='color:#FFD400; font-weight: bold;'>  {player['name']}</span></h2>", unsafe_allow_html=True)
+            # MODIFIED: Display Overall Rating prominently
+            overall_rating = player.get('overall_rating', player['stats']['skill_rating'])
+            st.markdown(f"<h3 style='text-align: center;'>Overall Rating: <span style='color: #7afbff;'>{overall_rating}</span> | Role:<span style='color:#7afbff; font-weight: bold;'> {player['role']} </span>| Country:<span style='color:#7afbff; font-weight: bold;'> {player['country']}</span></h3>", unsafe_allow_html=True)
             st.markdown(f"<h3 style='text-align: center; color: #007bff;'>Base Price: ₹{player['base_price']} crores</h3>", unsafe_allow_html=True)
     
             # Stats table
             stats_df = pd.DataFrame({
-                'Stat': ['Batting Average', 'Bowling Average', 'Matches Played', 'Skill Rating'],
+                'Stat': ['Overall Rating', 'Batting Average', 'Bowling Average', 'Matches Played'],
                 'Value': [
+                    overall_rating,
                     player['stats']['batting_avg'], 
                     player['stats']['bowling_avg'], 
-                    player['stats']['matches_played'],
-                    player['stats']['skill_rating']
+                    player['stats']['matches_played']
                 ]
             })
             st.table(stats_df)
@@ -360,16 +388,12 @@ def auction_screen():
             if st.session_state.current_team:
                 team = next((t for t in st.session_state.teams if t['id'] == st.session_state.current_team), None)
                 if team:
-                    st.markdown(f"<h3 style='text-align: center; color: #ff9800;'>Current Bidder: {team['name']}</h3>", unsafe_allow_html=True)
-    
+                    st.markdown(f"<h2 style='text-align: center; '>Current Bidder: <span style='color: #7afbff;'>{team['name']}</span></h2>", unsafe_allow_html=True)
+                                                                                                        
         st.markdown("---")
 
         # Bidding interface - Two bid options per team
         st.subheader("Place Your Bids")
-        
-        # First, calculate the number of columns needed based on teams
-        # For each team, we'll have two columns (for 0.5 Cr and 1 Cr bids)
-        num_teams = len(st.session_state.teams)
         
         # For each team, display bidding options in a separate row
         for team in st.session_state.teams:
@@ -506,9 +530,10 @@ def auction_screen():
                 transactions.append({
                     'Player': p['name'],
                     'Role': p['role'],
+                    'Country': p['country'],
+                    'Overall': p.get('overall_rating', p['stats']['skill_rating']),
                     'Team': p.get('sold_to', ''),
-                    'Price': f"₹{p.get('sold_price', 0)} crores",
-                    'Skill Rating': p['stats']['skill_rating']
+                    'Price': f"₹{p.get('sold_price', 0)} crores"
                 })
             st.table(pd.DataFrame(transactions))
         else:
@@ -528,11 +553,11 @@ def save_team_to_csv(team):
             'Name': p['name'],
             'Role': p['role'],
             'Country': p['country'],
+            'Overall': p.get('overall_rating', p['stats']['skill_rating']),
             'Price (crores)': p.get('sold_price', 0),
             'Batting Avg': p['stats']['batting_avg'],
             'Bowling Avg': p['stats']['bowling_avg'],
-            'Matches': p['stats']['matches_played'],
-            'Skill Rating': p['stats']['skill_rating']
+            'Matches': p['stats']['matches_played']
         })
     
     df = pd.DataFrame(player_data)
@@ -542,11 +567,11 @@ def save_team_to_csv(team):
         'Name': f"TEAM SUMMARY: {team['name']}",
         'Role': '',
         'Country': '',
+        'Overall': '',
         'Price (crores)': team['original_purse'] - team['purse'],
         'Batting Avg': '',
         'Bowling Avg': '',
-        'Matches': '',
-        'Skill Rating': ''
+        'Matches': ''
     }])
     
     result_df = pd.concat([df, summary_df])
