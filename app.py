@@ -79,8 +79,10 @@ def load_players_from_csv(file_path='player_list.csv'):
                 base_price = random.choice([1.5, 1.75, 2.0, 2.5])
             elif skill >= 70:
                 base_price = random.choice([1.0, 1.25, 1.5])
+            elif skill >= 60:
+                base_price = random.choice([0.75, 1.0])
             else:
-                base_price = random.choice([0.5, 0.75, 1.0])
+                base_price = 0.5
             
             # Standardize role names
             if role in ['batsman', 'batter']:
