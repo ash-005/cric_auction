@@ -76,7 +76,7 @@ def load_players_from_csv(file_path='player_list.csv'):
             if skill >= 86:
                 base_price = random.choice([3.0, 3.5, 4.0, 5.0])
             elif skill >= 77:
-                base_price = random.choice([1.5, 1.75, 2.0,2.5])
+                base_price = random.choice([1.5, 1.75, 2.0, 2.5])
             elif skill >= 70:
                 base_price = random.choice([1.0, 1.25, 1.5])
             else:
@@ -301,6 +301,9 @@ def view_team_players(team):
     
     st.dataframe(pd.DataFrame(player_data), use_container_width=True)
 
+# In the bidding interface section, we need to modify the logic to handle the first bid differently
+# Look for the section where the bid buttons are created
+
 def auction_screen():
     st.title("🏏 Cricket Player Auction")
     
@@ -392,16 +395,24 @@ def auction_screen():
                                                                                                         
         st.markdown("---")
 
-        # Bidding interface - Two bid options per team
+        # Bidding interface - Show different options based on whether first bid has been made
         st.subheader("Place Your Bids")
+        
+        # Check if the first bid has been made yet
+        first_bid_made = st.session_state.current_team is not None
         
         # For each team, display bidding options in a separate row
         for team in st.session_state.teams:
             # Check if this team is eligible to bid (can't bid if they were the last bidder)
             can_bid = team['can_bid'] and team['id'] != st.session_state.last_bidder
             
-            # Create a row with two columns for the team's bidding options
-            col1, col2, col3 = st.columns([2, 1, 1])
+            # Create a row with columns for the team's bidding options
+            if first_bid_made:
+                # After first bid, show +0.5 and +1.0 increment options
+                col1, col2, col3 = st.columns([2, 1, 1])
+            else:
+                # For first bid, just show one button to bid the base price
+                col1, col2 = st.columns([2, 2])
             
             with col1:
                 st.markdown(f"### {team['name']}")
@@ -415,41 +426,58 @@ def auction_screen():
                         else:
                             st.warning("Insufficient Funds")
             
-            # Calculate new bid amounts
-            half_cr_bid = round(st.session_state.current_bid + 0.5, 2)
-            one_cr_bid = round(st.session_state.current_bid + 1.0, 2)
-            
-            # Check if team can afford the bids
-            can_bid_half_cr = can_bid and team['purse'] >= half_cr_bid
-            can_bid_one_cr = can_bid and team['purse'] >= one_cr_bid
-            
-            with col2:
-                # 0.5 Cr bid button
-                if can_bid_half_cr:
-                    if st.button(f"Bid ₹{half_cr_bid} Cr (+0.5)", key=f"bid_half_{team['id']}"):
-                        st.session_state.current_bid = half_cr_bid
-                        st.session_state.current_team = team['id']
-                        st.session_state.last_bidder = team['id']
-                        st.experimental_rerun()
-                else:
-                    st.button(f"Bid ₹{half_cr_bid} Cr (+0.5)", disabled=True, key=f"disabled_half_{team['id']}")
-            
-            with col3:
-                # 1 Cr bid button
-                if can_bid_one_cr:
-                    if st.button(f"Bid ₹{one_cr_bid} Cr (+1.0)", key=f"bid_one_{team['id']}"):
-                        st.session_state.current_bid = one_cr_bid
-                        st.session_state.current_team = team['id']
-                        st.session_state.last_bidder = team['id']
-                        st.experimental_rerun()
-                else:
-                    st.button(f"Bid ₹{one_cr_bid} Cr (+1.0)", disabled=True, key=f"disabled_one_{team['id']}")
+            # Different bidding UI based on whether first bid has been made
+            if first_bid_made:
+                # Calculate new bid amounts for increments
+                half_cr_bid = round(st.session_state.current_bid + 0.5, 2)
+                one_cr_bid = round(st.session_state.current_bid + 1.0, 2)
+                
+                # Check if team can afford the bids
+                can_bid_half_cr = can_bid and team['purse'] >= half_cr_bid
+                can_bid_one_cr = can_bid and team['purse'] >= one_cr_bid
+                
+                with col2:
+                    # 0.5 Cr bid button
+                    if can_bid_half_cr:
+                        if st.button(f"Bid ₹{half_cr_bid} Cr (+0.5)", key=f"bid_half_{team['id']}"):
+                            st.session_state.current_bid = half_cr_bid
+                            st.session_state.current_team = team['id']
+                            st.session_state.last_bidder = team['id']
+                            st.experimental_rerun()
+                    else:
+                        st.button(f"Bid ₹{half_cr_bid} Cr (+0.5)", disabled=True, key=f"disabled_half_{team['id']}")
+                
+                with col3:
+                    # 1 Cr bid button
+                    if can_bid_one_cr:
+                        if st.button(f"Bid ₹{one_cr_bid} Cr (+1.0)", key=f"bid_one_{team['id']}"):
+                            st.session_state.current_bid = one_cr_bid
+                            st.session_state.current_team = team['id']
+                            st.session_state.last_bidder = team['id']
+                            st.experimental_rerun()
+                    else:
+                        st.button(f"Bid ₹{one_cr_bid} Cr (+1.0)", disabled=True, key=f"disabled_one_{team['id']}")
+            else:
+                # For first bid, show base price bid button
+                base_price = player['base_price']
+                can_bid_base = can_bid and team['purse'] >= base_price
+                
+                with col2:
+                    # Base price bid button
+                    if can_bid_base:
+                        if st.button(f"Bid ₹{base_price} Cr (Base Price)", key=f"bid_base_{team['id']}"):
+                            st.session_state.current_bid = base_price
+                            st.session_state.current_team = team['id']
+                            st.session_state.last_bidder = team['id']
+                            st.experimental_rerun()
+                    else:
+                        st.button(f"Bid ₹{base_price} Cr (Base Price)", disabled=True, key=f"disabled_base_{team['id']}")
         
         # Add a separator between teams and action buttons
         st.markdown("---")
         
         # For first-time bidding, show base price as the starting bid
-        if not st.session_state.current_team and st.session_state.current_bid == player['base_price']:
+        if not st.session_state.current_team:
             st.markdown(f"#### Starting bid: ₹{player['base_price']} crores (Base Price)")
         
         # Action buttons (Sold/Unsold)
