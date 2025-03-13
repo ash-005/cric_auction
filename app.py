@@ -4,6 +4,8 @@ import random
 import time
 import uuid
 import os
+from io import BytesIO
+
 
 # Set page config
 st.set_page_config(
@@ -12,7 +14,7 @@ st.set_page_config(
     layout="wide"
 )
 
-# Initialize session state variables if they don't exist
+# Initialize session state variables
 if 'app_stage' not in st.session_state:
     st.session_state.app_stage = 'setup'
 if 'teams' not in st.session_state:
@@ -34,45 +36,33 @@ if 'last_bidder' not in st.session_state:
 if 'player_batches' not in st.session_state:
     st.session_state.player_batches = {}
 
-# Load player data from CSV - MODIFIED FOR NEW CSV FORMAT
+# Load player data from CSV
 def load_players_from_csv(file_path='player_list_complete.csv'):
-    """
-    Load players from a CSV file with columns: Name, Overall, Role, Nationality
-    """
     try:
         df = pd.read_csv(file_path)
-        
-        # Check if required columns exist
         required_cols = ['Name', 'Overall', 'Role', 'Nationality']
         missing_cols = [col for col in required_cols if col not in df.columns]
         
         if missing_cols:
-            st.error(f"Missing columns in CSV: {', '.join(missing_cols)}")
-            # Generate sample data if CSV is invalid
             return generate_sample_players()
         
         players = []
-        
         for _, row in df.iterrows():
-            # Generate random stats based on Overall rating
             skill = float(row['Overall'])
-            
-            # Determine batting and bowling averages based on role and skill rating
             role = row['Role'].strip().lower()
+            
             if role in ['batsman', 'wicket-keeper', 'batter', 'wicketkeeper']:
-                batting_avg = int(skill * 0.5 + random.uniform(15, 25))  # Higher batting avg for batsmen
-                bowling_avg = int((100 - skill) * 0.3 + random.uniform(25, 40))  # Lower bowling avg is better
+                batting_avg = int(skill * 0.5 + random.uniform(15, 25))
+                bowling_avg = int((100 - skill) * 0.3 + random.uniform(25, 40))
             elif role in ['bowler']:
-                batting_avg = int(skill * 0.2 + random.uniform(10, 20))  # Lower batting avg for bowlers
-                bowling_avg = int((100 - skill) * 0.4 + random.uniform(15, 25))  # Better bowling avg for bowlers
-            else:  # All-rounder or other
+                batting_avg = int(skill * 0.2 + random.uniform(10, 20))
+                bowling_avg = int((100 - skill) * 0.4 + random.uniform(15, 25))
+            else:
                 batting_avg = int(skill * 0.4 + random.uniform(15, 20))
                 bowling_avg = int((100 - skill) * 0.35 + random.uniform(20, 30))
             
-            # Calculate matches based on skill (as a proxy for experience)
             matches_played = int(skill + random.randint(5, 50))
             
-            # Determine base price based on overall rating
             if skill >= 91:
                 base_price = random.choice([4.5,5.0])
             elif skill >= 86:
@@ -86,7 +76,6 @@ def load_players_from_csv(file_path='player_list_complete.csv'):
             else:
                 base_price = 0.5
             
-            # Standardize role names
             if role in ['batsman', 'batter']:
                 standardized_role = 'Batsman'
             elif role in ['bowler']:
@@ -96,7 +85,7 @@ def load_players_from_csv(file_path='player_list_complete.csv'):
             elif role in ['wicket-keeper', 'wicketkeeper', 'keeper']:
                 standardized_role = 'Wicket-keeper'
             else:
-                standardized_role = 'All-rounder'  # Default case
+                standardized_role = 'All-rounder'
             
             player = {
                 'id': str(uuid.uuid4()),
@@ -104,7 +93,7 @@ def load_players_from_csv(file_path='player_list_complete.csv'):
                 'role': standardized_role,
                 'country': row['Nationality'],
                 'base_price': base_price,
-                'overall_rating': int(skill),  # Store the overall rating from CSV
+                'overall_rating': int(skill),
                 'stats': {
                     'batting_avg': batting_avg,
                     'bowling_avg': bowling_avg,
@@ -114,20 +103,15 @@ def load_players_from_csv(file_path='player_list_complete.csv'):
                 'status': 'unsold'
             }
             players.append(player)
-        
         return players
     except Exception as e:
-        st.error(f"Error loading CSV: {e}")
-        # Fallback to sample data if CSV can't be loaded
         return generate_sample_players()
 
-# Sample player data (fallback in case CSV isn't available)
 def generate_sample_players():
     player_roles = ['Batsman', 'Bowler', 'All-rounder', 'Wicket-keeper']
     player_countries = ['India', 'Australia', 'England', 'New Zealand', 'South Africa', 'West Indies', 'Pakistan', 'Sri Lanka']
     
     players = []
-    # Generate sample player data
     for i in range(100):
         skill_rating = random.randint(50, 95)
         player = {
@@ -135,8 +119,8 @@ def generate_sample_players():
             'name': f"Player {i+1}",
             'role': random.choice(player_roles),
             'country': random.choice(player_countries),
-            'base_price': random.choice([0.5, 0.75, 1.0, 1.5, 2.0]),  # Base price in crores
-            'overall_rating': skill_rating,  # Add overall rating
+            'base_price': random.choice([0.5, 0.75, 1.0, 1.5, 2.0]),
+            'overall_rating': skill_rating,
             'stats': {
                 'batting_avg': int(random.uniform(20, 60)),
                 'bowling_avg': int(random.uniform(18, 40)),
@@ -148,11 +132,9 @@ def generate_sample_players():
         players.append(player)
     return players
 
-# Initialize or change app stage
 def set_stage(stage):
     st.session_state.app_stage = stage
 
-# Organize players into batches by role
 def organize_players_by_role(players):
     batches = {
         'Batsman': [],
@@ -163,7 +145,6 @@ def organize_players_by_role(players):
     
     for player in players:
         role = player['role']
-        # Ensure compatibility with different case or naming conventions
         if role.lower() == 'batsman' or role.lower() == 'batter':
             batches['Batsman'].append(player)
         elif role.lower() == 'bowler':
@@ -173,30 +154,66 @@ def organize_players_by_role(players):
         elif role.lower() == 'wicket-keeper' or role.lower() == 'wicketkeeper' or role.lower() == 'keeper':
             batches['Wicket-keeper'].append(player)
         else:
-            # If role doesn't match, put in a default category
             batches['All-rounder'].append(player)
-    
     return batches
+
+def check_auction_complete():
+    if not st.session_state.remaining_players:
+        next_batch = None
+        found_current = False
+        
+        for role in st.session_state.auction_order:
+            if role == st.session_state.current_batch:
+                found_current = True
+                continue
+            if found_current and role in st.session_state.player_batches and st.session_state.player_batches[role]:
+                next_batch = role
+                break
+        
+        if not next_batch:
+            for role in st.session_state.auction_order:
+                if role in st.session_state.player_batches and st.session_state.player_batches[role]:
+                    next_batch = role
+                    break
+        
+        if next_batch:
+            st.session_state.remaining_players = st.session_state.player_batches[next_batch].copy()
+            st.session_state.player_batches[next_batch] = []
+            st.session_state.current_batch = next_batch
+        else:
+            eligible_teams = [t for t in st.session_state.teams if t['can_bid']]
+            if not eligible_teams:
+                st.session_state.auction_complete = True
+                set_stage('results')
+
+def proceed_to_next_batch():
+    for player in st.session_state.remaining_players:
+        player['status'] = 'unsold'
+    st.session_state.remaining_players = []
+    st.session_state.current_player = None
+    check_auction_complete()
+
+def end_auction_early():
+    # Mark all remaining players across all batches as unsold
+    for role in st.session_state.player_batches:
+        for player in st.session_state.player_batches[role]:
+            player['status'] = 'unsold'
+    for player in st.session_state.remaining_players:
+        player['status'] = 'unsold'
+    
+    st.session_state.auction_complete = True
+    set_stage('results')
 
 def setup_teams():
     st.title("🏏 Cricket Player Auction Simulator")
     
-    st.markdown("""
-    ## Setup Teams
-    Enter the number of teams participating in the auction and their details.
-    Each team will have a purse amount to spend on players.
-    """)
-    
-    # Option to upload a custom player data CSV
     uploaded_file = st.file_uploader("Upload Player Data CSV (Optional)", type=['csv'])
     if uploaded_file is not None:
-        # Save the uploaded file temporarily
         with open('uploaded_player_data.csv', 'wb') as f:
             f.write(uploaded_file.getbuffer())
-        st.success("CSV file uploaded successfully! Players will be loaded from this file.")
     
     num_teams = st.number_input("Number of Teams", min_value=2, max_value=10, value=3, step=1)
-    default_purse = st.number_input("Default Purse Amount per Team (in crores)", min_value=5.0, max_value=100.0, value=90.0, step=0.5)
+    default_purse = st.number_input("Default Purse Amount per Team (₹ Cr)", min_value=5.0, max_value=100.0, value=90.0, step=0.5)
     
     with st.form("team_setup_form"):
         teams = []
@@ -206,7 +223,7 @@ def setup_teams():
             with cols[i % 2]:
                 st.subheader(f"Team {i+1}")
                 name = st.text_input(f"Team Name", value=f"Team {i+1}", key=f"team_name_{i}")
-                purse = st.number_input(f"Purse Amount (in crores)", min_value=5.0, max_value=100.0, value=default_purse, step=0.5, key=f"team_purse_{i}")
+                purse = st.number_input(f"Purse Amount (₹ Cr)", min_value=5.0, max_value=100.0, value=default_purse, step=0.5, key=f"team_purse_{i}")
                 
                 team = {
                     'id': str(uuid.uuid4()),
@@ -220,12 +237,9 @@ def setup_teams():
         
         max_squad_size = st.number_input("Maximum Squad Size per Team", min_value=11, max_value=25, value=15, step=1)
         
-        # Auction settings
         st.subheader("Auction Settings")
-        
-        # Option to select which player types to auction first
         auction_order = st.multiselect(
-            "Auction Order (Select types in the order you want to auction them)",
+            "Auction Order",
             ["Batsman", "Bowler", "All-rounder", "Wicket-keeper"],
             default=["Wicket-keeper", "Batsman", "Bowler", "All-rounder"]
         )
@@ -236,23 +250,17 @@ def setup_teams():
             st.session_state.teams = teams
             st.session_state.max_squad_size = max_squad_size
             
-            # Load players from the uploaded CSV if it exists, otherwise use default or generate sample
             if uploaded_file is not None:
                 st.session_state.players = load_players_from_csv('uploaded_player_data.csv')
             else:
-                # Try to load from the default file path, fall back to sample data if it doesn't exist
                 try:
                     st.session_state.players = load_players_from_csv()
                 except:
                     st.session_state.players = generate_sample_players()
             
-            # Organize players by role for batch auctioning
             st.session_state.player_batches = organize_players_by_role(st.session_state.players)
-            
-            # Store the auction order preference
             st.session_state.auction_order = auction_order if auction_order else ["Wicket-keeper", "Batsman", "Bowler", "All-rounder"]
             
-            # Initialize remaining players with the first role in the auction order
             if st.session_state.auction_order and st.session_state.auction_order[0] in st.session_state.player_batches:
                 first_role = st.session_state.auction_order[0]
                 st.session_state.remaining_players = st.session_state.player_batches[first_role].copy()
@@ -264,110 +272,90 @@ def setup_teams():
             set_stage('auction')
             st.rerun()
 
-
-def check_auction_complete():
-    # Check if current batch is empty
-    if not st.session_state.remaining_players:
-        # Find the next batch to auction based on auction order
-        next_batch = None
-        # Track if we've found the current batch in the order
-        found_current = False
-        
-        # First, check batches after the current batch
-        for role in st.session_state.auction_order:
-            if role == st.session_state.current_batch:
-                found_current = True
-                continue
-            if found_current and role in st.session_state.player_batches and st.session_state.player_batches[role]:
-                next_batch = role
-                break
-        
-        # If not found, check from the beginning
-        if not next_batch:
-            for role in st.session_state.auction_order:
-                if role in st.session_state.player_batches and st.session_state.player_batches[role]:
-                    next_batch = role
-                    break
-        
-        if next_batch:
-            st.session_state.remaining_players = st.session_state.player_batches[next_batch].copy()
-            st.session_state.player_batches[next_batch] = []  # Clear this batch
-            st.session_state.current_batch = next_batch
-        else:
-            # Check if all teams have max players or can't bid
-            eligible_teams = [t for t in st.session_state.teams if t['can_bid']]
-            if not eligible_teams:
-                st.session_state.auction_complete = True
-                set_stage('results')
-
-def proceed_to_next_batch():
-    # Mark remaining players as unsold
-    for player in st.session_state.remaining_players:
-        player['status'] = 'unsold'
-    # Clear remaining players and trigger batch transition
-    st.session_state.remaining_players = []
-    st.session_state.current_player = None
-    check_auction_complete()
+def view_team_players(team):
+    players = team['players']
+    if not players:
+        st.info(f"{team['name']} hasn't acquired any players yet.")
+        return
+    
+    player_data = []
+    for p in players:
+        player_data.append({
+            'Name': p['name'],
+            'Role': p['role'],
+            'Country': p['country'],
+            'Price': f"₹{p.get('sold_price', 0)} Cr",
+            'Batting Avg': p['stats']['batting_avg'],
+            'Bowling Avg': p['stats']['bowling_avg']
+        })
+    
+    st.dataframe(pd.DataFrame(player_data), use_container_width=True)
 
 def auction_screen():
     st.title("🏏 Cricket Player Auction")
     
-    # Display current batch being auctioned
-    current_batch = st.session_state.get('current_batch', 'Unknown')
-    st.markdown(f"### Currently Auctioning: {current_batch}s")
+    # Batch control buttons
+    col1, col2 = st.columns([1, 2])
+    with col1:
+        if st.button("Proceed to Next Batch"):
+            proceed_to_next_batch()
+            st.rerun()
+    with col2:
+        if st.button("🚨 End Auction Early", help="Mark all remaining players as unsold and complete the auction"):
+            end_auction_early()
+            st.rerun()
+    
+    st.markdown(f"### Currently Auctioning: {st.session_state.current_batch}s")
     st.markdown(f"*{len(st.session_state.remaining_players)} players remaining in this batch*")
     
-    # Add manual batch progression button
-    if st.button("Proceed to Next Batch"):
-        proceed_to_next_batch()
-        st.rerun()
-
-    
-    # Display teams and their status
     cols = st.columns(len(st.session_state.teams))
-    # ... [Rest of the team display code remains unchanged]
-
-    # Check if auction is complete
+    for i, team in enumerate(st.session_state.teams):
+        with cols[i]:
+            st.subheader(team['name'])
+            st.metric("Remaining Purse", f"₹{team['purse']} Cr")
+            st.metric("Players", len(team['players']))
+            
+            if st.expander(f"View {team['name']} Squad"):
+                view_team_players(team)
+            
+            if len(team['players']) >= st.session_state.max_squad_size:
+                team['can_bid'] = False
+                st.warning("Squad Full")
+            
+            if team['purse'] < 0.5:
+                team['can_bid'] = False
+                st.warning("Insufficient Funds")
+    
     check_auction_complete()
     if st.session_state.auction_complete:
         st.rerun()
-
     
-    # Player selection
     if st.session_state.current_player is None and st.session_state.remaining_players:
-        # Get a new player for auction
-        # Sort remaining players by base price and skill for more interesting auction experience
         sorted_players = sorted(st.session_state.remaining_players, 
                                key=lambda x: (x['base_price'], x['stats']['skill_rating']), 
                                reverse=True)
         
-        player_index = random.randint(0, min(9, len(sorted_players)-1))  # Pick from top 10 players
+        player_index = random.randint(0, min(9, len(sorted_players)-1))
         st.session_state.current_player = sorted_players[player_index]
-        st.session_state.current_bid = st.session_state.current_player['base_price']  # Start bid at base price
+        st.session_state.current_bid = st.session_state.current_player['base_price']
         st.session_state.current_team = None
         st.session_state.last_bidder = None
         
-        # Remove this player from remaining players
         st.session_state.remaining_players = [p for p in st.session_state.remaining_players 
                                               if p['id'] != st.session_state.current_player['id']]
     
-    # Display current player for auction
     if st.session_state.current_player:
         st.markdown("---")
         player = st.session_state.current_player
     
-        # Make the auctioning panel bigger
-        auction_col, bid_col = st.columns([3, 1])  # Make auction details take more space
+        auction_col, bid_col = st.columns([3, 1])
     
         with auction_col:
-            #st.markdown(f"<h2 style='text-align: center; color: #ff4b4b;'>🎯 Now Auctioning: {player['name']}</h2>", unsafe_allow_html=True)
             st.markdown(f"<h2 style='text-align: center; color: #ff4b4b;'>🎯 Now Auctioning:<span style='color:#FFD400; font-weight: bold;'>  {player['name']}</span></h2>", unsafe_allow_html=True)
-            # MODIFIED: Display Overall Rating prominently
             overall_rating = player.get('overall_rating', player['stats']['skill_rating'])
             st.markdown(f"<h3 style='text-align: center;'>Overall Rating: <span style='color: #7afbff;'>{overall_rating}</span> | Role:<span style='color:#7afbff; font-weight: bold;'> {player['role']} </span>| Country:<span style='color:#7afbff; font-weight: bold;'> {player['country']}</span></h3>", unsafe_allow_html=True)
-            st.markdown(f"<h3 style='text-align: center; color: #007bff;'>Base Price: ₹{player['base_price']} crores</h3>", unsafe_allow_html=True)
+            st.markdown(f"<h3 style='text-align: center; color: #007bff;'>Base Price: ₹{player['base_price']} Cr</h3>", unsafe_allow_html=True)
     
-            # Stats table
             stats_df = pd.DataFrame({
                 'Stat': ['Overall Rating', 'Batting Average', 'Bowling Average', 'Matches Played'],
                 'Value': [
@@ -381,7 +369,7 @@ def auction_screen():
     
         with bid_col:
             st.markdown("<h2 style='text-align: center;'>Current Bid</h2>", unsafe_allow_html=True)
-            st.markdown(f"<h1 style='text-align: center; color: #28a745;'>₹{st.session_state.current_bid} crores</h1>", unsafe_allow_html=True)
+            st.markdown(f"<h1 style='text-align: center; color: #28a745;'>₹{st.session_state.current_bid} Cr</h1>", unsafe_allow_html=True)
             
             if st.session_state.current_team:
                 team = next((t for t in st.session_state.teams if t['id'] == st.session_state.current_team), None)
@@ -390,23 +378,15 @@ def auction_screen():
                                                                                                         
         st.markdown("---")
 
-        # Bidding interface - Show different options based on whether first bid has been made
         st.subheader("Place Your Bids")
-        
-        # Check if the first bid has been made yet
         first_bid_made = st.session_state.current_team is not None
         
-        # For each team, display bidding options in a separate row
         for team in st.session_state.teams:
-            # Check if this team is eligible to bid (can't bid if they were the last bidder)
             can_bid = team['can_bid'] and team['id'] != st.session_state.last_bidder
             
-            # Create a row with columns for the team's bidding options
             if first_bid_made:
-                # After first bid, show +0.5 and +1.0 increment options
                 col1, col2, col3 = st.columns([2, 1, 1])
             else:
-                # For first bid, just show one button to bid the base price
                 col1, col2 = st.columns([2, 2])
             
             with col1:
@@ -416,23 +396,16 @@ def auction_screen():
                     if team['id'] == st.session_state.last_bidder:
                         st.info("Waiting for another team to bid")
                     elif not team['can_bid']:
-                        if len(team['players']) >= st.session_state.max_squad_size:
-                            st.warning("Squad Full")
-                        else:
-                            st.warning("Insufficient Funds")
+                        st.warning("Insufficient Funds" if team['purse'] < 0.5 else "Squad Full")
             
-            # Different bidding UI based on whether first bid has been made
             if first_bid_made:
-                # Calculate new bid amounts for increments
                 half_cr_bid = round(st.session_state.current_bid + 0.5, 2)
                 one_cr_bid = round(st.session_state.current_bid + 1.0, 2)
                 
-                # Check if team can afford the bids
                 can_bid_half_cr = can_bid and team['purse'] >= half_cr_bid
                 can_bid_one_cr = can_bid and team['purse'] >= one_cr_bid
                 
                 with col2:
-                    # 0.5 Cr bid button
                     if can_bid_half_cr:
                         if st.button(f"Bid ₹{half_cr_bid} Cr (+0.5)", key=f"bid_half_{team['id']}"):
                             st.session_state.current_bid = half_cr_bid
@@ -443,7 +416,6 @@ def auction_screen():
                         st.button(f"Bid ₹{half_cr_bid} Cr (+0.5)", disabled=True, key=f"disabled_half_{team['id']}")
                 
                 with col3:
-                    # 1 Cr bid button
                     if can_bid_one_cr:
                         if st.button(f"Bid ₹{one_cr_bid} Cr (+1.0)", key=f"bid_one_{team['id']}"):
                             st.session_state.current_bid = one_cr_bid
@@ -453,12 +425,10 @@ def auction_screen():
                     else:
                         st.button(f"Bid ₹{one_cr_bid} Cr (+1.0)", disabled=True, key=f"disabled_one_{team['id']}")
             else:
-                # For first bid, show base price bid button
                 base_price = player['base_price']
                 can_bid_base = can_bid and team['purse'] >= base_price
                 
                 with col2:
-                    # Base price bid button
                     if can_bid_base:
                         if st.button(f"Bid ₹{base_price} Cr (Base Price)", key=f"bid_base_{team['id']}"):
                             st.session_state.current_bid = base_price
@@ -468,69 +438,59 @@ def auction_screen():
                     else:
                         st.button(f"Bid ₹{base_price} Cr (Base Price)", disabled=True, key=f"disabled_base_{team['id']}")
         
-        # Add a separator between teams and action buttons
         st.markdown("---")
         
-        # For first-time bidding, show base price as the starting bid
         if not st.session_state.current_team:
-            st.markdown(f"#### Starting bid: ₹{player['base_price']} crores (Base Price)")
+            st.markdown(f"#### Starting bid: ₹{player['base_price']} Cr (Base Price)")
         
-        # Action buttons (Sold/Unsold)
         action_col1, action_col2 = st.columns(2)
         
         with action_col1:
-            # Add the "Sold!" button
-            if st.session_state.current_team:  # Only enable if someone has bid
-                sold_button = st.button("SOLD! ⚡", key="sold_button")
-                if sold_button:
-                    # Add player to the team that won the bid
+            if st.session_state.current_team:
+                if st.button("SOLD! ⚡", key="sold_button"):
                     team = next((t for t in st.session_state.teams if t['id'] == st.session_state.current_team), None)
                     if team:
-                        player['status'] = 'sold'
-                        player['sold_to'] = team['name']
-                        player['sold_price'] = st.session_state.current_bid
-                        team['players'].append(player)
+                        sold_player = dict(st.session_state.current_player)
+                        sold_player.update({
+                            'status': 'sold',
+                            'sold_to': team['name'],
+                            'sold_price': st.session_state.current_bid
+                        })
+                        
+                        for idx, p in enumerate(st.session_state.players):
+                            if p['id'] == sold_player['id']:
+                                st.session_state.players[idx] = sold_player
+                                break
+                        
+                        team['players'].append(sold_player)
                         team['purse'] -= st.session_state.current_bid
                         
-                        st.success(f"{player['name']} sold to {team['name']} for ₹{st.session_state.current_bid} crores!")
-                        time.sleep(1)  # Pause briefly to show the success message
+                        st.success(f"{sold_player['name']} sold to {team['name']} for ₹{st.session_state.current_bid} Cr!")
+                        time.sleep(1)
                         
-                        # Reset for next player
                         st.session_state.current_player = None
-                        st.session_state.current_bid = 0
-                        st.session_state.current_team = None
-                        st.session_state.last_bidder = None
                         st.rerun()
             else:
                 st.button("SOLD! ⚡", disabled=True)
         
         with action_col2:
-            # Add "Unsold" button - only available if no bids have been made
             if not st.session_state.current_team:
-                unsold_button = st.button("Unsold ❌", key="unsold_button")
-                if unsold_button:
+                if st.button("Unsold ❌", key="unsold_button"):
                     player['status'] = 'unsold'
                     st.info(f"{player['name']} remains unsold.")
-                    time.sleep(1)  # Pause briefly to show the info message
+                    time.sleep(1)
                     
-                    # Reset for next player
                     st.session_state.current_player = None
-                    st.session_state.current_bid = 0
-                    st.session_state.current_team = None
-                    st.session_state.last_bidder = None
                     st.rerun()
             else:
-                # If a bid has been made, disable the unsold button
                 st.button("Unsold ❌", key="unsold_button", disabled=True)
     
-    # Show auction progress
     st.markdown("---")
     st.subheader("Auction Progress")
     
     sold_players = [p for p in st.session_state.players if p['status'] == 'sold']
     unsold_players = [p for p in st.session_state.players if p['status'] == 'unsold']
     
-    # Count how many players are still waiting for auction across all batches
     remaining_count = len(st.session_state.remaining_players)
     for role in st.session_state.player_batches:
         remaining_count += len(st.session_state.player_batches[role])
@@ -545,7 +505,6 @@ def auction_screen():
     with col4:
         st.metric("Current Batch", st.session_state.current_batch)
     
-    # Option to view transaction log
     if st.checkbox("Show Transaction Log"):
         if sold_players:
             transactions = []
@@ -554,16 +513,15 @@ def auction_screen():
                     'Player': p['name'],
                     'Role': p['role'],
                     'Country': p['country'],
-                    'Overall': p.get('overall_rating', p['stats']['skill_rating']),
                     'Team': p.get('sold_to', ''),
-                    'Price': f"₹{p.get('sold_price', 0)} crores"
+                    'Price (Cr)': p.get('sold_price', 0),
+                    'Skill Rating': p['stats']['skill_rating']
                 })
-            st.table(pd.DataFrame(transactions))
+            st.dataframe(pd.DataFrame(transactions).sort_values('Price (Cr)', ascending=False), use_container_width=True)
         else:
             st.info("No transactions yet.")
 
 def save_team_to_csv(team):
-    """Save individual team data to a CSV file"""
     if not os.path.exists('team_data'):
         os.makedirs('team_data')
         
@@ -576,30 +534,24 @@ def save_team_to_csv(team):
             'Name': p['name'],
             'Role': p['role'],
             'Country': p['country'],
-            'Overall': p.get('overall_rating', p['stats']['skill_rating']),
-            'Price (crores)': p.get('sold_price', 0),
+            'Price (Cr)': p.get('sold_price', 0),
             'Batting Avg': p['stats']['batting_avg'],
             'Bowling Avg': p['stats']['bowling_avg'],
             'Matches': p['stats']['matches_played']
         })
     
     df = pd.DataFrame(player_data)
-    
-    # Add team summary at the bottom
     summary_df = pd.DataFrame([{
         'Name': f"TEAM SUMMARY: {team['name']}",
         'Role': '',
         'Country': '',
-        'Overall': '',
-        'Price (crores)': team['original_purse'] - team['purse'],
+        'Price (Cr)': team['original_purse'] - team['purse'],
         'Batting Avg': '',
         'Bowling Avg': '',
         'Matches': ''
     }])
     
     result_df = pd.concat([df, summary_df])
-    
-    # Replace invalid characters in team name for filename
     filename = team['name'].replace(" ", "_").replace("/", "_").replace("\\", "_")
     filepath = f"team_data/{filename}.csv"
     result_df.to_csv(filepath, index=False)
@@ -608,138 +560,132 @@ def save_team_to_csv(team):
 def results_screen():
     st.title("🏆 Auction Results")
     
-    st.markdown("""
-    ## Auction Completed!
-    View the final team compositions and statistics below.
-    """)
-    
     # Summary statistics
-    total_spent = sum(team['original_purse'] - team['purse'] for team in st.session_state.teams)
-    avg_player_price = round(total_spent / sum(len(team['players']) for team in st.session_state.teams), 2) if sum(len(team['players']) for team in st.session_state.teams) > 0 else 0
+    total_spent = sum(t['original_purse'] - t['purse'] for t in st.session_state.teams)
+    total_players = sum(len(t['players']) for t in st.session_state.teams)
     
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        st.metric("Total Amount Spent", f"₹{total_spent} crores")
-    with col2:
-        st.metric("Avg. Player Price", f"₹{avg_player_price} crores")
-    with col3:
-        sold_players = [p for p in st.session_state.players if p['status'] == 'sold']
-        if sold_players:
+    col1, col2, col3, col4 = st.columns(4)
+    col1.metric("Total Players Bought", total_players)
+    col2.metric("Total Amount Spent", f"₹{total_spent:.2f} Cr")
+    
+    if total_players > 0:
+        col3.metric("Average Price", f"₹{total_spent/total_players:.2f} Cr")
+    with col4:
+        if sold_players := [p for p in st.session_state.players if p['status'] == 'sold']:
             highest_paid = max(sold_players, key=lambda x: x.get('sold_price', 0))
-            st.metric("Highest Paid Player", f"{highest_paid['name']} (₹{highest_paid.get('sold_price', 0)} crores)")
+            st.metric("Highest Paid Player", f"{highest_paid['name']} (₹{highest_paid.get('sold_price', 0)} Cr)")
         else:
             st.metric("Highest Paid Player", "None")
     
     # Team tabs
-    team_tabs = st.tabs([team['name'] for team in st.session_state.teams])
-    
-    team_files = []
-    for i, tab in enumerate(team_tabs):
+    tabs = st.tabs([t['name'] for t in st.session_state.teams] + ["Complete Log"])
+    for i, tab in enumerate(tabs[:len(st.session_state.teams)]):
         with tab:
             team = st.session_state.teams[i]
+            st.subheader(f"{team['name']} Summary")
             
-            col1, col2, col3 = st.columns(3)
-            with col1:
-                st.metric("Players Acquired", len(team['players']))
-            with col2:
-                st.metric("Purse Spent", f"₹{team['original_purse'] - team['purse']} crores")
-            with col3:
-                st.metric("Purse Remaining", f"₹{team['purse']} crores")
+            cols = st.columns(4)
+            cols[0].metric("Players Bought", len(team['players']))
+            cols[1].metric("Total Spent", f"₹{team['original_purse'] - team['purse']:.2f} Cr")
+            cols[2].metric("Remaining Purse", f"₹{team['purse']:.2f} Cr")
+            cols[3].metric("Original Purse", f"₹{team['original_purse']:.2f} Cr")
             
-            # Team composition by role
-            roles = {}
-            for player in team['players']:
-                role = player['role']
-                if role in roles:
-                    roles[role] += 1
-                else:
-                    roles[role] = 1
-            
-            if roles:
-                st.subheader("Team Composition")
-                composition_df = pd.DataFrame({
-                    'Role': list(roles.keys()),
-                    'Count': list(roles.values())
-                })
-                st.bar_chart(composition_df.set_index('Role'))
-            
-            # Player details
-            st.subheader("Player List")
             if team['players']:
-                player_data = []
-                for p in team['players']:
-                    player_data.append({
-                        'Name': p['name'],
-                        'Role': p['role'],
-                        'Country': p['country'],
-                        'Price': f"₹{p.get('sold_price', 0)} crores",
-                        'Batting Avg': p['stats']['batting_avg'],
-                        'Bowling Avg': p['stats']['bowling_avg'],
-                        'Matches': p['stats']['matches_played'],
-                        'Skill Rating': p['stats']['skill_rating']
-                    })
-                st.dataframe(pd.DataFrame(player_data), use_container_width=True)
+                role_counts = pd.DataFrame({
+                    'Role': [p['role'] for p in team['players']]
+                }).value_counts().reset_index()
+                role_counts.columns = ['Role', 'Count']
+                st.bar_chart(role_counts.set_index('Role'))
                 
-                # Save team data to CSV
-                filepath = save_team_to_csv(team)
-                if filepath:
-                    team_files.append((team['name'], filepath))
-                    
-                    # Provide download button for this team's CSV
-                    team_df = pd.read_csv(filepath)
-                    csv = team_df.to_csv(index=False).encode('utf-8')
-                    st.download_button(
-                        label=f"Download {team['name']} Squad",
-                        data=csv,
-                        file_name=f"{team['name']}_squad.csv",
-                        mime="text/csv",
-                    )
+                st.dataframe(pd.DataFrame([{
+                    'Player': p['name'],
+                    'Role': p['role'],
+                    'Price': f"₹{p.get('sold_price', 0):.2f} Cr",
+                    'Batting': p['stats']['batting_avg'],
+                    'Bowling': p['stats']['bowling_avg']
+                } for p in team['players']]), hide_index=True)
             else:
-                st.info("No players acquired.")
+                st.info("No players purchased")
     
-    # Download all results
-    if st.button("Download Complete Auction Results"):
-        results = []
+    # Complete transaction log
+    with tabs[-1]:
+        transactions = pd.DataFrame([{
+            'Team': t['name'],
+            'Player': p['name'],
+            'Role': p['role'],
+            'Price (₹ Cr)': p.get('sold_price', 0),
+            'Batting Avg': p['stats']['batting_avg'],
+            'Bowling Avg': p['stats']['bowling_avg']
+        } for t in st.session_state.teams for p in t['players']])
+        
+        if not transactions.empty:
+            st.dataframe(
+                transactions.sort_values('Price (₹ Cr)', ascending=False),
+                use_container_width=True,
+                hide_index=True
+            )
+        else:
+            st.info("No transactions recorded")
+    st.markdown("---")
+    st.subheader("Download Complete Auction Data")
+    
+    # Create in-memory Excel file
+    output = BytesIO()
+    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+        # Create team sheets
         for team in st.session_state.teams:
-            for player in team['players']:
-                results.append({
-                    'Team': team['name'],
-                    'Player': player['name'],
-                    'Role': player['role'],
-                    'Country': player['country'],
-                    'Price (crores)': player.get('sold_price', 0),
-                    'Batting Avg': player['stats']['batting_avg'],
-                    'Bowling Avg': player['stats']['bowling_avg'],
-                    'Matches': player['stats']['matches_played']
+            player_data = []
+            for p in team['players']:
+                player_data.append({
+                    'Name': p['name'],
+                    'Role': p['role'],
+                    'Country': p['country'],
+                    'Price (₹ Cr)': p.get('sold_price', 0),
+                    'Batting Avg': p['stats']['batting_avg'],
+                    'Bowling Avg': p['stats']['bowling_avg'],
+                    'Matches': p['stats']['matches_played'],
+                    'Skill Rating': p['stats']['skill_rating']
                 })
+            
+            df = pd.DataFrame(player_data)
+            # Add team summary
+            summary_df = pd.DataFrame([{
+                'Name': f"Total Spent: ₹{team['original_purse'] - team['purse']} Cr",
+                'Role': f"Remaining Purse: ₹{team['purse']} Cr",
+                'Country': f"Original Purse: ₹{team['original_purse']} Cr",
+                'Price (₹ Cr)': f"Players Bought: {len(team['players'])}",
+                'Batting Avg': '',
+                'Bowling Avg': '',
+                'Matches': '',
+                'Skill Rating': ''
+            }])
+            
+            # Combine player data and summary
+            combined_df = pd.concat([df, summary_df])
+            combined_df.to_excel(writer, sheet_name=team['name'][:31], index=False)  # Sheet name max 31 chars
         
-        results_df = pd.DataFrame(results)
+        # Add complete transaction log sheet
+        transactions = [{
+            'Team': team['name'],
+            'Player': player['name'],
+            'Role': player['role'],
+            'Price (₹ Cr)': player.get('sold_price', 0),
+            'Batting Avg': player['stats']['batting_avg'],
+            'Bowling Avg': player['stats']['bowling_avg']
+        } for team in st.session_state.teams for player in team['players']]
         
-        # Convert dataframe to CSV
-        csv = results_df.to_csv(index=False).encode('utf-8')
-        st.download_button(
-            label="Download Complete Auction CSV",
-            data=csv,
-            file_name="cricket_auction_results.csv",
-            mime="text/csv",
-        )
-    
-    # Display information about saved files
-    if team_files:
-        st.markdown("---")
-        st.subheader("Team Files Saved")
-        st.write("Each team's data has been saved to a separate CSV file with their respective name.")
-        for team_name, filepath in team_files:
-            st.success(f"{team_name}: {filepath}")
-    
-    # Reset auction
-    if st.button("Start New Auction"):
-        for key in st.session_state.keys():
-            del st.session_state[key]
-        st.rerun()
+        log_df = pd.DataFrame(transactions)
+        log_df.to_excel(writer, sheet_name='Complete Log', index=False)
+
+    # Create download button
+    st.download_button(
+        label="📥 Download All Teams Data (Excel)",
+        data=output.getvalue(),
+        file_name="Auction_Results.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
 
 
-# Main app logic
 def main():
     if st.session_state.app_stage == 'setup':
         setup_teams()
