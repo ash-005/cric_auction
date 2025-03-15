@@ -720,32 +720,6 @@ def results_screen():
     )
 
 
-        results_df = pd.DataFrame(results)
-        
-        # Convert dataframe to CSV
-        csv = results_df.to_csv(index=False).encode('utf-8')
-        st.download_button(
-            label="Download Complete Auction CSV",
-            data=csv,
-            file_name="cricket_auction_results.csv",
-            mime="text/csv",
-        )
-    
-    # Display information about saved files
-    if team_files:
-        st.markdown("---")
-        st.subheader("Team Files Saved")
-        st.write("Each team's data has been saved to a separate CSV file with their respective name.")
-        for team_name, filepath in team_files:
-            st.success(f"{team_name}: {filepath}")
-    
-    # Reset auction
-    if st.button("Start New Auction"):
-        for key in st.session_state.keys():
-            del st.session_state[key]
-        st.rerun()
-
-# Main app logic
 def main():
     if st.session_state.app_stage == 'setup':
         setup_teams()
