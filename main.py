@@ -5,11 +5,11 @@ import time
 import uuid
 import os
 from io import BytesIO
-
+import xlsxwriter 
 
 # Set page config
 st.set_page_config(
-    page_title="Cricket Auction Simulator - BETA",
+    page_title="Cricket Auction Simulator",
     page_icon="🏏",
     layout="wide"
 )
@@ -191,18 +191,7 @@ def proceed_to_next_batch():
         player['status'] = 'unsold'
     st.session_state.remaining_players = []
     st.session_state.current_player = None
-    
-    # Find the next batch
-    current_index = st.session_state.auction_order.index(st.session_state.current_batch)
-    next_index = (current_index + 1) % len(st.session_state.auction_order)  # Loop back to start
-    next_batch = st.session_state.auction_order[next_index]
-    
-    if next_batch in st.session_state.player_batches and st.session_state.player_batches[next_batch]:
-        st.session_state.remaining_players = st.session_state.player_batches[next_batch].copy()
-        st.session_state.player_batches[next_batch] = []  # Empty the selected batch
-        st.session_state.current_batch = next_batch
-    
-    st.rerun()
+    check_auction_complete()
 
 def end_auction_early():
     # Mark all remaining players across all batches as unsold
@@ -323,7 +312,32 @@ def view_team_players(team):
         })
     
     st.dataframe(pd.DataFrame(player_data), use_container_width=True)
-
+def live_team_dashboard():
+    """Displays a live dashboard of player type distribution per team."""
+    st.subheader("📊 Live Team Composition Dashboard")
+    
+    team_data = []
+    for team in st.session_state.teams:
+        role_counts = {
+            'Team': team['name'],
+            'Batsman': 0,
+            'Bowler': 0,
+            'All-rounder': 0,
+            'Wicket-keeper': 0
+        }
+        
+        for player in team['players']:
+            role_counts[player['role']] += 1
+        
+        team_data.append(role_counts)
+    
+    df_team_roles = pd.DataFrame(team_data)
+    
+    if not df_team_roles.empty:
+        st.dataframe(df_team_roles, use_container_width=True)
+        st.bar_chart(df_team_roles.set_index('Team'))
+    else:
+        st.info("No players have been assigned to teams yet.")
 def auction_screen():
     st.title("🏏 Cricket Player Auction")
     
@@ -565,7 +579,7 @@ def auction_screen():
             st.dataframe(pd.DataFrame(transactions).sort_values('Price (Cr)', ascending=False), use_container_width=True)
         else:
             st.info("No transactions yet.")
-
+    live_team_dashboard()
 def save_team_to_csv(team):
     if not os.path.exists('team_data'):
         os.makedirs('team_data')
@@ -674,28 +688,41 @@ def results_screen():
     st.markdown("---")
     st.subheader("Download Complete Auction Data")
     
+    # Create in-memory Excel file
     output = BytesIO()
-    
-    zip_filename = "Auction_Results.zip"
-    with open(zip_filename, "wb") as zip_file:
-        import zipfile
-        with zipfile.ZipFile(zip_file, "w") as zip_archive:
-            for team in st.session_state.teams:
-                df = pd.DataFrame([{  # Collect player data
-                    'Name': p['name'], 'Role': p['role'], 'Price (₹ Cr)': p.get('sold_price', 0)
-                } for p in team['players']])
-                
-                csv_filename = f"{team['name'].replace(' ', '_')}.csv"
-                df.to_csv(csv_filename, index=False)
-                zip_archive.write(csv_filename)
-    
-    with open(zip_filename, "rb") as f:
-        st.download_button(
-            label="📥 Download All Teams Data (ZIP)",
-            data=f,
-            file_name=zip_filename,
-            mime="application/zip"
-        )    
+    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+        # Create team sheets
+        for team in st.session_state.teams:
+            player_data = []
+            for p in team['players']:
+                player_data.append({
+                    'Name': p['name'],
+                    'Role': p['role'],
+                    'Country': p['country'],
+                    'Price (₹ Cr)': p.get('sold_price', 0),
+                    'Batting Avg': p['stats']['batting_avg'],
+                    'Bowling Avg': p['stats']['bowling_avg'],
+                    'Matches': p['stats']['matches_played'],
+                    'Skill Rating': p['stats']['skill_rating']
+                })
+            
+            df = pd.DataFrame(player_data)
+            # Add team summary
+            summary_df = pd.DataFrame([{
+                'Name': f"Total Spent: ₹{team['original_purse'] - team['purse']} Cr",
+                'Role': f"Remaining Purse: ₹{team['purse']} Cr",
+                'Country': f"Original Purse: ₹{team['original_purse']} Cr",
+                'Price (₹ Cr)': f"Players Bought: {len(team['players'])}",
+                'Batting Avg': '',
+                'Bowling Avg': '',
+                'Matches': '',
+                'Skill Rating': ''
+            }])
+            
+            # Combine player data and summary
+            combined_df = pd.concat([df, summary_df])
+            combined_df.to_excel(writer, sheet_name=team['name'][:31], index=False)  # Sheet name max 31 chars
+        
         # Add complete transaction log sheet
         transactions = [{
             'Team': team['name'],
