@@ -262,7 +262,7 @@ def setup_teams():
                 st.session_state.current_batch = "All Players"
             
             set_stage('auction')
-            st.experimental_rerun()
+            st.rerun()
 
 def check_auction_complete():
     # Check if current batch is empty
@@ -340,7 +340,7 @@ def auction_screen():
     # Check if auction is complete
     check_auction_complete()
     if st.session_state.auction_complete:
-        st.experimental_rerun()
+        st.rerun()
     
     # Player selection
     if st.session_state.current_player is None and st.session_state.remaining_players:
@@ -447,7 +447,7 @@ def auction_screen():
                             st.session_state.current_bid = half_cr_bid
                             st.session_state.current_team = team['id']
                             st.session_state.last_bidder = team['id']
-                            st.experimental_rerun()
+                            st.rerun()
                     else:
                         st.button(f"Bid ₹{half_cr_bid} Cr (+0.5)", disabled=True, key=f"disabled_half_{team['id']}")
                 
@@ -458,7 +458,7 @@ def auction_screen():
                             st.session_state.current_bid = one_cr_bid
                             st.session_state.current_team = team['id']
                             st.session_state.last_bidder = team['id']
-                            st.experimental_rerun()
+                            st.rerun()
                     else:
                         st.button(f"Bid ₹{one_cr_bid} Cr (+1.0)", disabled=True, key=f"disabled_one_{team['id']}")
             else:
@@ -473,7 +473,7 @@ def auction_screen():
                             st.session_state.current_bid = base_price
                             st.session_state.current_team = team['id']
                             st.session_state.last_bidder = team['id']
-                            st.experimental_rerun()
+                            st.rerun()
                     else:
                         st.button(f"Bid ₹{base_price} Cr (Base Price)", disabled=True, key=f"disabled_base_{team['id']}")
         
@@ -509,7 +509,7 @@ def auction_screen():
                         st.session_state.current_bid = 0
                         st.session_state.current_team = None
                         st.session_state.last_bidder = None
-                        st.experimental_rerun()
+                        st.rerun()
             else:
                 st.button("SOLD! ⚡", disabled=True)
         
@@ -527,7 +527,7 @@ def auction_screen():
                     st.session_state.current_bid = 0
                     st.session_state.current_team = None
                     st.session_state.last_bidder = None
-                    st.experimental_rerun()
+                    st.rerun()
             else:
                 # If a bid has been made, disable the unsold button
                 st.button("Unsold ❌", key="unsold_button", disabled=True)
@@ -745,7 +745,7 @@ def results_screen():
     if st.button("Start New Auction"):
         for key in st.session_state.keys():
             del st.session_state[key]
-        st.experimental_rerun()
+        st.rerun()
 
 # Main app logic
 def main():
