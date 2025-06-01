@@ -223,7 +223,7 @@ def setup_teams():
             with cols[i % 2]:
                 st.subheader(f"Team {i+1}")
                 name = st.text_input(f"Team Name", value=f"Team {i+1}", key=f"team_name_{i}")
-                purse = st.number_input(f"Purse Amount (₹ Cr)", min_value=5.0, max_value=100.0, value=default_purse, step=0.5, key=f"team_purse_{i}")
+                purse = st.number_input(f"Purse Amount (₹ Cr)", min_value=5.0, max_value=150.0, value=default_purse, step=0.5, key=f"team_purse_{i}")
                 
                 team = {
                     'id': str(uuid.uuid4()),
