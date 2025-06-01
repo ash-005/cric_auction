@@ -213,7 +213,7 @@ def setup_teams():
             f.write(uploaded_file.getbuffer())
     
     num_teams = st.number_input("Number of Teams", min_value=2, max_value=10, value=3, step=1)
-    default_purse = st.number_input("Default Purse Amount per Team (₹ Cr)", min_value=5.0, max_value=100.0, value=90.0, step=0.5)
+    default_purse = st.number_input("Default Purse Amount per Team (₹ Cr)", min_value=5.0, max_value=150.0, value=90.0, step=0.5)
     
     with st.form("team_setup_form"):
         teams = []
