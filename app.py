@@ -312,7 +312,32 @@ def view_team_players(team):
         })
     
     st.dataframe(pd.DataFrame(player_data), use_container_width=True)
-
+def live_team_dashboard():
+    """Displays a live dashboard of player type distribution per team."""
+    st.subheader("📊 Live Team Composition Dashboard")
+    
+    team_data = []
+    for team in st.session_state.teams:
+        role_counts = {
+            'Team': team['name'],
+            'Batsman': 0,
+            'Bowler': 0,
+            'All-rounder': 0,
+            'Wicket-keeper': 0
+        }
+        
+        for player in team['players']:
+            role_counts[player['role']] += 1
+        
+        team_data.append(role_counts)
+    
+    df_team_roles = pd.DataFrame(team_data)
+    
+    if not df_team_roles.empty:
+        st.dataframe(df_team_roles, use_container_width=True)
+        st.bar_chart(df_team_roles.set_index('Team'))
+    else:
+        st.info("No players have been assigned to teams yet.")
 def auction_screen():
     st.title("🏏 Cricket Player Auction")
     
@@ -554,7 +579,8 @@ def auction_screen():
             st.dataframe(pd.DataFrame(transactions).sort_values('Price (Cr)', ascending=False), use_container_width=True)
         else:
             st.info("No transactions yet.")
-
+        
+    live_team_dashboard()
 def save_team_to_csv(team):
     if not os.path.exists('team_data'):
         os.makedirs('team_data')
