@@ -794,7 +794,7 @@ def display_current_auction(manager: AuctionManager):
                 # Custom bid amount
                 custom_bid = st.number_input(
                     "Custom", 
-                    min_value=manager.current_bid + 0.5,
+                    min_value=manager.current_bid,
                     max_value=min(team.purse, 50.0),
                     value=manager.current_bid + 1.0,
                     step=0.5,
