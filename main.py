@@ -101,7 +101,7 @@ class AuctionManager:
         self.max_squad_size: int = 15
         self.bid_history: List[Dict] = []
     
-    def organize_players_by_role(self) -> Dict[str, List[Player]]:
+    def organize_players_by_role(self) -> Dict[str, List[Player]:
         """Organize players into role-based batches"""
         batches = {role.value: [] for role in PlayerRole}
         
@@ -771,30 +771,37 @@ def display_current_auction(manager: AuctionManager):
     st.subheader("💰 Place Your Bids")
     
     has_bids = manager.current_team_id is not None
-    
+    first_bid = manager.current_team_id is None
+
     # Create bid buttons for each team
     for team in manager.teams:
-        if not manager.can_team_bid(team, manager.current_bid + 0.5):
-            continue
-        
-        columns = st.columns([2, 1, 1]) if has_bids else st.columns([2, 2])
-        
-        with columns[0]:
-            st.markdown(f"**{team.name}** - ₹{team.purse:.1f} Cr remaining")
-        
-        with columns[1]:
-            # Quick bid buttons
-            next_bid = manager.current_bid + 0.5
-            if st.button(f"₹{next_bid:.1f} Cr", key=f"quick_bid_{team.id}", use_container_width=True):
-                if manager.place_bid(team.id, next_bid):
-                    st.rerun()
-        
-        if has_bids:
+        # For first bid, only allow base price, and only if team can bid at base price
+        if first_bid:
+            if not manager.can_team_bid(team, player.base_price):
+                continue
+            columns = st.columns([2, 2])
+            with columns[0]:
+                st.markdown(f"**{team.name}** - ₹{team.purse:.1f} Cr remaining")
+            with columns[1]:
+                if st.button(f"₹{player.base_price:.1f} Cr (First Bid)", key=f"first_bid_{team.id}", use_container_width=True):
+                    if manager.place_bid(team.id, player.base_price):
+                        st.rerun()
+        else:
+            # For subsequent bids, allow increments above current bid
+            if not manager.can_team_bid(team, manager.current_bid + 0.5):
+                continue
+            columns = st.columns([2, 1, 1])
+            with columns[0]:
+                st.markdown(f"**{team.name}** - ₹{team.purse:.1f} Cr remaining")
+            with columns[1]:
+                next_bid = manager.current_bid + 0.5
+                if st.button(f"₹{next_bid:.1f} Cr", key=f"quick_bid_{team.id}", use_container_width=True):
+                    if manager.place_bid(team.id, next_bid):
+                        st.rerun()
             with columns[2]:
-                # Custom bid amount
                 custom_bid = st.number_input(
                     "Custom", 
-                    min_value=manager.current_bid,
+                    min_value=manager.current_bid + 0.5,
                     max_value=min(team.purse, 50.0),
                     value=manager.current_bid + 1.0,
                     step=0.5,
