@@ -6,6 +6,7 @@ import uuid
 import os
 from io import BytesIO
 import xlsxwriter 
+import plotly.express as px
 
 # Set page config
 st.set_page_config(
@@ -624,76 +625,141 @@ def results_screen():
     total_spent = sum(t['original_purse'] - t['purse'] for t in st.session_state.teams)
     total_players = sum(len(t['players']) for t in st.session_state.teams)
     
-    col1, col2, col3, col4 = st.columns(4)
-    col1.metric("Total Players Bought", total_players)
-    col2.metric("Total Amount Spent", f"₹{total_spent:.2f} Cr")
-    
+    # Get highest paid player
+    highest_paid = None
+    highest_price = 0
+    for team in st.session_state.teams:
+        for player in team['players']:
+            if player.get('sold_price', 0) > highest_price:
+                highest_price = player.get('sold_price', 0)
+                highest_paid = player
+
+    # Updated metrics - removed total players, made highest paid more prominent
+    col1, col2, col3 = st.columns(3)
+    col1.metric("Total Amount Spent", f"₹{total_spent:.2f} Cr")
     if total_players > 0:
-        col3.metric("Average Price", f"₹{total_spent/total_players:.2f} Cr")
-    with col4:
-        if sold_players := [p for p in st.session_state.players if p['status'] == 'sold']:
-            highest_paid = max(sold_players, key=lambda x: x.get('sold_price', 0))
-            st.metric("Highest Paid Player", f"{highest_paid['name']} (₹{highest_paid.get('sold_price', 0)} Cr)")
-        else:
-            st.metric("Highest Paid Player", "None")
+        col2.metric("Average Price", f"₹{total_spent/total_players:.2f} Cr")
+    if highest_paid:
+        col3.metric("Most Expensive Player", f"{highest_paid['name']}", f"₹{highest_paid['sold_price']:.2f} Cr")
     
     # Team tabs
+    st.markdown("### Team-wise Analysis")
+    
+    # Get all transactions for timeline plot
+    all_transactions = []
+    for team in st.session_state.teams:
+        for player in team['players']:
+            if player['status'] == 'sold':
+                all_transactions.append({
+                    'team': team['name'],
+                    'player': player['name'],
+                    'price': player.get('sold_price', 0),
+                    'time': pd.Timestamp.now()  # In a real app, this would be the actual sale timestamp
+                })
+    
+    # Create timeline plot if there are transactions
+    if all_transactions:
+        st.markdown("### 📈 Auction Timeline")
+        timeline_df = pd.DataFrame(all_transactions)
+        timeline_df = timeline_df.sort_values('price', ascending=True)
+        
+        fig = px.line(timeline_df, 
+                     x=range(len(timeline_df)), 
+                     y='price',
+                     text='player',
+                     title='Player Purchase Timeline by Price',
+                     labels={'x': 'Purchase Order', 'y': 'Price (₹ Cr)', 'text': 'Player'})
+        fig.update_traces(textposition='top center')
+        fig.update_layout(showlegend=False)
+        st.plotly_chart(fig, use_container_width=True)
+
+    # Team tabs with enhanced visualization
     tabs = st.tabs([t['name'] for t in st.session_state.teams] + ["Complete Log"])
-    for i, tab in enumerate(tabs[:len(st.session_state.teams)]):
+    
+    for i, tab in enumerate(tabs[:-1]):  # Exclude Complete Log tab
         with tab:
             team = st.session_state.teams[i]
             st.subheader(f"{team['name']} Summary")
             
-            cols = st.columns(4)
-            cols[0].metric("Players Bought", len(team['players']))
-            cols[1].metric("Total Spent", f"₹{team['original_purse'] - team['purse']:.2f} Cr")
-            cols[2].metric("Remaining Purse", f"₹{team['purse']:.2f} Cr")
-            cols[3].metric("Original Purse", f"₹{team['original_purse']:.2f} Cr")
+            cols = st.columns(3)
+            cols[0].metric("Total Spent", f"₹{team['original_purse'] - team['purse']:.2f} Cr")
+            cols[1].metric("Remaining Purse", f"₹{team['purse']:.2f} Cr")
+            cols[2].metric("Players Bought", len(team['players']))
             
             if team['players']:
-                role_counts = pd.DataFrame({
-                    'Role': [p['role'] for p in team['players']]
-                }).value_counts().reset_index()
-                role_counts.columns = ['Role', 'Count']
-                st.bar_chart(role_counts.set_index('Role'))
+                # Enhanced team composition visualization
+                st.markdown("### Team Composition")
+                col1, col2 = st.columns(2)
                 
+                with col1:
+                    # Role distribution pie chart
+                    role_counts = pd.DataFrame({
+                        'Role': [p['role'] for p in team['players']]
+                    }).value_counts().reset_index()
+                    role_counts.columns = ['Role', 'Count']
+                    
+                    fig = px.pie(role_counts, 
+                               values='Count', 
+                               names='Role',
+                               title='Squad Role Distribution')
+                    st.plotly_chart(fig, use_container_width=True)
+                
+                with col2:
+                    # Price distribution bar chart
+                    price_data = pd.DataFrame([{
+                        'Player': p['name'],
+                        'Price': p.get('sold_price', 0),
+                        'Role': p['role']
+                    } for p in team['players']])
+                    
+                    fig = px.bar(price_data, 
+                               x='Player', 
+                               y='Price',
+                               color='Role',
+                               title='Player Price Distribution')
+                    fig.update_layout(xaxis_tickangle=-45)
+                    st.plotly_chart(fig, use_container_width=True)
+
+                # Player details table
+                st.markdown("### Squad Details")
                 st.dataframe(pd.DataFrame([{
                     'Player': p['name'],
                     'Role': p['role'],
                     'Price': f"₹{p.get('sold_price', 0):.2f} Cr",
                     'Batting': p['stats']['batting_avg'],
                     'Bowling': p['stats']['bowling_avg']
-                } for p in team['players']]), hide_index=True)
+                } for p in team['players']]).sort_values('Price', ascending=False), 
+                hide_index=True)
             else:
                 st.info("No players purchased")
-    
-    # Complete transaction log
+
+    # Complete Log tab
     with tabs[-1]:
-        transactions = pd.DataFrame([{
-            'Team': t['name'],
-            'Player': p['name'],
-            'Role': p['role'],
-            'Price (₹ Cr)': p.get('sold_price', 0),
-            'Batting Avg': p['stats']['batting_avg'],
-            'Bowling Avg': p['stats']['bowling_avg']
-        } for t in st.session_state.teams for p in t['players']])
-        
-        if not transactions.empty:
-            st.dataframe(
-                transactions.sort_values('Price (₹ Cr)', ascending=False),
-                use_container_width=True,
-                hide_index=True
-            )
+        transactions = []
+        for team in st.session_state.teams:
+            for player in team['players']:
+                transactions.append({
+                    'Team': team['name'],
+                    'Player': player['name'],
+                    'Role': player['role'],
+                    'Price (₹ Cr)': player.get('sold_price', 0),
+                    'Batting Avg': player['stats']['batting_avg'],
+                    'Bowling Avg': player['stats']['bowling_avg']
+                })
+                
+        if transactions:
+            st.dataframe(pd.DataFrame(transactions).sort_values('Price (₹ Cr)', ascending=False), use_container_width=True)
         else:
             st.info("No transactions recorded")
-    st.markdown("---")
-    st.subheader("Download Complete Auction Data")
-    
-    # Create in-memory Excel file
-    output = BytesIO()
+
+    # Export functionality
+    output = io.BytesIO()
     with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-        # Create team sheets
+        # Write team-wise data
         for team in st.session_state.teams:
+            if not team['players']:
+                continue
+                
             player_data = []
             for p in team['players']:
                 player_data.append({
@@ -708,34 +774,7 @@ def results_screen():
                 })
             
             df = pd.DataFrame(player_data)
-            # Add team summary
-            summary_df = pd.DataFrame([{
-                'Name': f"Total Spent: ₹{team['original_purse'] - team['purse']} Cr",
-                'Role': f"Remaining Purse: ₹{team['purse']} Cr",
-                'Country': f"Original Purse: ₹{team['original_purse']} Cr",
-                'Price (₹ Cr)': f"Players Bought: {len(team['players'])}",
-                'Batting Avg': '',
-                'Bowling Avg': '',
-                'Matches': '',
-                'Skill Rating': ''
-            }])
-            
-            # Combine player data and summary
-            combined_df = pd.concat([df, summary_df])
-            combined_df.to_excel(writer, sheet_name=team['name'][:31], index=False)  # Sheet name max 31 chars
-        
-        # Add complete transaction log sheet
-        transactions = [{
-            'Team': team['name'],
-            'Player': player['name'],
-            'Role': player['role'],
-            'Price (₹ Cr)': player.get('sold_price', 0),
-            'Batting Avg': player['stats']['batting_avg'],
-            'Bowling Avg': player['stats']['bowling_avg']
-        } for team in st.session_state.teams for player in team['players']]
-        
-        log_df = pd.DataFrame(transactions)
-        log_df.to_excel(writer, sheet_name='Complete Log', index=False)
+            df.to_excel(writer, sheet_name=team['name'][:31], index=False)
 
     # Create download button
     st.download_button(
