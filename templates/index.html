@@ -1,0 +1,1493 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cricket Auction Simulator</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.5/socket.io.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        'inter': ['Inter', 'sans-serif'],
+                    },
+                    colors: {
+                        'primary': {
+                            50: '#f0f9ff',
+                            500: '#3b82f6',
+                            600: '#2563eb',
+                            700: '#1d4ed8',
+                            800: '#1e40af',
+                            900: '#1e3a8a',
+                        },
+                        'dark': {
+                            50: '#f8fafc',
+                            100: '#f1f5f9',
+                            200: '#e2e8f0',
+                            300: '#cbd5e1',
+                            400: '#94a3b8',
+                            500: '#64748b',
+                            600: '#475569',
+                            700: '#334155',
+                            800: '#1e293b',
+                            850: '#172033',
+                            900: '#0f172a',
+                            950: '#020617',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+        }
+        .glass-effect {
+            background: rgba(30, 41, 59, 0.7);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(148, 163, 184, 0.1);
+        }
+        .bouncing-loader {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        .bouncing-loader > div {
+            width: 0.75rem;
+            height: 0.75rem;
+            background: linear-gradient(45deg, #3b82f6, #1d4ed8);
+            border-radius: 50%;
+            animation: bouncing-loader 1.2s infinite ease-in-out;
+        }
+        .bouncing-loader > div:nth-child(2) {
+            animation-delay: 0.2s;
+        }
+        .bouncing-loader > div:nth-child(3) {
+            animation-delay: 0.4s;
+        }
+        @keyframes bouncing-loader {
+            0%, 80%, 100% {
+                transform: scale(0.8);
+                opacity: 0.5;
+            }
+            40% {
+                transform: scale(1.2);
+                opacity: 1;
+            }
+        }
+        .gradient-border {
+            background: linear-gradient(45deg, #3b82f6, #1d4ed8, #7c3aed);
+            background-size: 300% 300%;
+            animation: gradient-shift 3s ease infinite;
+        }
+        @keyframes gradient-shift {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+        .card-hover {
+            transition: all 0.3s ease;
+        }
+        .card-hover:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.3), 0 10px 10px -5px rgba(0, 0, 0, 0.1);
+        }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-dark-900 via-dark-800 to-dark-900 text-white min-h-screen font-inter">
+
+    <!-- Main Container -->
+    <div class="min-h-screen flex items-center justify-center p-6 lg:p-12">
+        <div id="app" class="w-full max-w-7xl mx-auto">
+
+            <!-- Welcome/Setup Screen -->
+            <div id="setup-screen" class="glass-effect rounded-3xl shadow-2xl overflow-hidden">
+                <!-- Header -->
+                <div class="bg-gradient-to-r from-primary-600 to-primary-800 px-12 py-16 text-center">
+                    <div class="max-w-3xl mx-auto">
+                        <h1 class="text-6xl font-bold mb-6 text-white tracking-tight">🏏 Cricket Auction</h1>
+                        <p class="text-xl text-primary-100 leading-relaxed">Professional cricket auction simulator with real-time bidding and team management</p>
+                    </div>
+                </div>
+
+                <!-- Content -->
+                <div class="p-12">
+                    <div class="grid lg:grid-cols-2 gap-12 max-w-6xl mx-auto">
+                        <!-- Create Room Card -->
+                        <div class="glass-effect rounded-2xl p-10 card-hover border border-dark-600">
+                            <div class="text-center mb-8">
+                                <div class="w-16 h-16 bg-gradient-to-r from-primary-500 to-primary-700 rounded-2xl flex items-center justify-center mx-auto mb-6">
+                                    <span class="text-2xl">🎯</span>
+                                </div>
+                                <h2 class="text-3xl font-bold mb-4 text-white">Create New Auction</h2>
+                                <p class="text-dark-300 text-lg">Start a new auction room and invite others to join</p>
+                            </div>
+
+                            <div class="space-y-6">
+                                <div>
+                                    <label class="block text-sm font-semibold text-dark-200 mb-3">Your Name</label>
+                                    <input type="text" id="create-username" placeholder="Enter your name"
+                                           class="w-full bg-dark-800 border border-dark-600 rounded-xl px-6 py-4 text-white placeholder-dark-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all duration-200">
+                                </div>
+
+                                <div>
+                                    <label class="block text-sm font-semibold text-dark-200 mb-3">Team Name (Optional)</label>
+                                    <input type="text" id="create-team-name" placeholder="Enter your team name"
+                                           class="w-full bg-dark-800 border border-dark-600 rounded-xl px-6 py-4 text-white placeholder-dark-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all duration-200">
+                                </div>
+
+                                <div>
+                                    <label for="player-csv" class="block text-sm font-semibold text-dark-200 mb-3">Upload Players CSV</label>
+                                    <div class="relative">
+                                        <input type="file" id="player-csv" accept=".csv"
+                                               class="w-full bg-dark-800 border border-dark-600 rounded-xl px-6 py-4 text-white file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-primary-600 file:text-white hover:file:bg-primary-700 file:transition-colors file:duration-200">
+                                    </div>
+                                </div>
+
+                                <button id="create-room-btn"
+                                        class="w-full bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-700 hover:to-primary-800 text-white font-bold py-5 px-8 rounded-xl transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-xl">
+                                    Create Auction Room
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Join Room Card -->
+                        <div class="glass-effect rounded-2xl p-10 card-hover border border-dark-600">
+                            <div class="text-center mb-8">
+                                <div class="w-16 h-16 bg-gradient-to-r from-green-500 to-green-700 rounded-2xl flex items-center justify-center mx-auto mb-6">
+                                    <span class="text-2xl">🚪</span>
+                                </div>
+                                <h2 class="text-3xl font-bold mb-4 text-white">Join Existing Auction</h2>
+                                <p class="text-dark-300 text-lg">Enter a room code to join an ongoing auction</p>
+                            </div>
+
+                            <div class="space-y-6">
+                                <div>
+                                    <label class="block text-sm font-semibold text-dark-200 mb-3">Your Name</label>
+                                    <input type="text" id="join-username" placeholder="Enter your name"
+                                           class="w-full bg-dark-800 border border-dark-600 rounded-xl px-6 py-4 text-white placeholder-dark-400 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all duration-200">
+                                </div>
+
+                                <div>
+                                    <label class="block text-sm font-semibold text-dark-200 mb-3">Team Name (Optional)</label>
+                                    <input type="text" id="team-name-input" placeholder="Enter team name"
+                                           class="w-full bg-dark-800 border border-dark-600 rounded-xl px-6 py-4 text-white placeholder-dark-400 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all duration-200">
+                                </div>
+
+                                <div>
+                                    <label class="block text-sm font-semibold text-dark-200 mb-3">Room Code</label>
+                                    <input type="text" id="room-code-input" placeholder="Enter 6-character room code"
+                                           class="w-full bg-dark-800 border border-dark-600 rounded-xl px-6 py-4 text-white placeholder-dark-400 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all duration-200 font-mono text-lg tracking-wider">
+                                </div>
+
+                                <button id="join-room-btn"
+                                        class="w-full bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white font-bold py-5 px-8 rounded-xl transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-xl">
+                                    Join Auction Room
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Lobby Screen -->
+            <div id="lobby-screen" class="hidden glass-effect rounded-3xl shadow-2xl overflow-hidden">
+                <!-- Header -->
+                <div class="bg-gradient-to-r from-primary-600 to-primary-800 px-12 py-12">
+                    <div class="text-center">
+                        <h2 class="text-4xl font-bold mb-4 text-white">Auction Lobby</h2>
+                        <div class="inline-flex items-center bg-white/20 rounded-2xl px-8 py-4 backdrop-blur-sm">
+                            <span class="text-primary-100 text-lg font-medium mr-4">Room Code:</span>
+                            <span id="room-code-display" class="text-white font-mono text-2xl font-bold tracking-wider"></span>
+                        </div>
+                        <p class="text-primary-100 mt-6 text-lg">Waiting for all players to join...</p>
+                    </div>
+                </div>
+
+                <div class="p-12">
+                    <!-- Room Settings (Owner Only) -->
+                    <div id="room-settings" class="hidden mb-12">
+                        <div class="glass-effect rounded-2xl p-8 border border-dark-600">
+                            <div class="flex items-center mb-8">
+                                <div class="w-12 h-12 bg-gradient-to-r from-yellow-500 to-orange-600 rounded-xl flex items-center justify-center mr-4">
+                                    <span class="text-xl">⚙️</span>
+                                </div>
+                                <h3 class="text-2xl font-bold text-white">Auction Settings</h3>
+                            </div>
+
+                            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+                                <div>
+                                    <label class="block text-sm font-semibold text-dark-200 mb-3">Max Players</label>
+                                    <select id="max-players-select" class="w-full bg-dark-800 border border-dark-600 rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-primary-500">
+                                        <option value="2">2 Players</option>
+                                        <option value="3">3 Players</option>
+                                        <option value="4">4 Players</option>
+                                        <option value="5">5 Players</option>
+                                        <option value="6">6 Players</option>
+                                        <option value="7">7 Players</option>
+                                        <option value="8" selected>8 Players</option>
+                                        <option value="9">9 Players</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-semibold text-dark-200 mb-3">Squad Size</label>
+                                    <select id="squad-size-select" class="w-full bg-dark-800 border border-dark-600 rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-primary-500">
+                                        <option value="11" selected>11 Players</option>
+                                        <option value="15">15 Players</option>
+                                        <option value="18">18 Players</option>
+                                        <option value="20">20 Players</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-semibold text-dark-200 mb-3">Team Purse</label>
+                                    <select id="team-purse-select" class="w-full bg-dark-800 border border-dark-600 rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-primary-500">
+                                        <option value="90">₹90 Crores</option>
+                                        <option value="100" selected>₹100 Crores</option>
+                                        <option value="120">₹120 Crores</option>
+                                        <option value="150">₹150 Crores</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-semibold text-dark-200 mb-3">Auction Order</label>
+                                    <select id="auction-order-select" class="w-full bg-dark-800 border border-dark-600 rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-primary-500">
+                                        <option value="random" selected>Random Order</option>
+                                        <option value="alphabetical">Alphabetical</option>
+                                        <option value="skill_desc">Skill (High to Low)</option>
+                                        <option value="skill_asc">Skill (Low to High)</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="mt-8">
+                                <button id="update-settings-btn" class="bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white font-bold py-3 px-8 rounded-xl transition-all duration-300 transform hover:scale-105">
+                                    Update Settings
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Players List -->
+                    <div class="glass-effect rounded-2xl p-8 border border-dark-600 mb-12">
+                        <div class="flex items-center mb-8">
+                            <div class="w-12 h-12 bg-gradient-to-r from-green-500 to-emerald-600 rounded-xl flex items-center justify-center mr-4">
+                                <span class="text-xl">👥</span>
+                            </div>
+                            <h3 class="text-2xl font-bold text-white">Players in Lobby</h3>
+                        </div>
+                        <div id="player-list" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                            <!-- Player cards will be injected here -->
+                        </div>
+                    </div>
+
+                    <!-- Start Auction Button (Owner Only) -->
+                    <div id="owner-controls" class="hidden text-center">
+                        <button id="start-auction-btn" class="bg-gradient-to-r from-primary-600 to-primary-800 hover:from-primary-700 hover:to-primary-900 text-white font-bold py-6 px-12 rounded-2xl transition-all duration-300 transform hover:scale-105 shadow-2xl text-xl">
+                            🚀 Start Auction
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Auction Screen -->
+            <div id="auction-screen" class="hidden">
+                <!-- Owner Controls -->
+                <div id="auction-owner-controls" class="hidden mb-8">
+                    <div class="glass-effect rounded-2xl p-6 border border-dark-600">
+                        <div class="flex justify-center gap-6">
+                            <button id="skip-player-btn" class="bg-gradient-to-r from-orange-600 to-orange-700 hover:from-orange-700 hover:to-orange-800 text-white font-bold py-3 px-8 rounded-xl transition-all duration-300 transform hover:scale-105">
+                                ⏭️ Skip Player
+                            </button>
+                            <button id="end-auction-btn" class="bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white font-bold py-3 px-8 rounded-xl transition-all duration-300 transform hover:scale-105">
+                                🛑 End Auction
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 xl:grid-cols-12 gap-8">
+                    <!-- Left Panel: Sold Players & Auction Trends -->
+                    <div class="xl:col-span-3 space-y-6">
+                        <!-- Sold Players -->
+                        <div class="glass-effect rounded-2xl p-6 border border-dark-600 h-[350px]">
+                            <div class="flex items-center mb-6">
+                                <div class="w-10 h-10 bg-gradient-to-r from-green-500 to-emerald-600 rounded-xl flex items-center justify-center mr-3">
+                                    <span class="text-lg">✅</span>
+                                </div>
+                                <h3 class="text-xl font-bold text-white">Sold Players</h3>
+                            </div>
+                            <div id="sold-players-list" class="overflow-y-auto h-[250px] space-y-3">
+                                <!-- Sold players will be injected here -->
+                            </div>
+                        </div>
+
+                        <!-- Auction Trends Chart -->
+                        <div class="glass-effect rounded-2xl p-6 border border-dark-600 h-[350px]">
+                            <div class="flex items-center mb-6">
+                                <div class="w-10 h-10 bg-gradient-to-r from-purple-500 to-purple-700 rounded-xl flex items-center justify-center mr-3">
+                                    <span class="text-lg">📈</span>
+                                </div>
+                                <h3 class="text-xl font-bold text-white">Price Trends</h3>
+                            </div>
+                            <div class="h-[250px]">
+                                <canvas id="auction-trends-chart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Center Panel: Current Player & Bidding -->
+                    <div class="xl:col-span-6">
+                        <!-- Timer -->
+                        <div class="text-center mb-8">
+                            <div id="timer-display" class="inline-flex items-center justify-center w-32 h-32 bg-gradient-to-r from-red-500 to-red-700 rounded-full text-6xl font-bold text-white shadow-2xl">
+                                15
+                            </div>
+                        </div>
+
+                        <!-- Player Card -->
+                        <div id="current-player-card" class="glass-effect rounded-2xl p-8 border border-dark-600 mb-8">
+                            <div id="player-details" class="text-center">
+                                <h2 id="player-name" class="text-5xl font-bold mb-4 text-white">Player Name</h2>
+                                <div class="flex justify-center items-center gap-8 mb-6">
+                                    <div class="text-center">
+                                        <p class="text-sm font-semibold text-dark-300 mb-1">ROLE</p>
+                                        <p id="player-role" class="text-xl font-bold text-primary-400">Role</p>
+                                    </div>
+                                    <div class="text-center">
+                                        <p class="text-sm font-semibold text-dark-300 mb-1">COUNTRY</p>
+                                        <p id="player-nationality" class="text-xl font-bold text-primary-400">Nationality</p>
+                                    </div>
+                                    <div class="text-center">
+                                        <p class="text-sm font-semibold text-dark-300 mb-1">OVERALL</p>
+                                        <p id="player-overall" class="text-xl font-bold text-primary-400"><span></span></p>
+                                    </div>
+                                </div>
+                                <div class="bg-dark-800 rounded-xl p-4 inline-block">
+                                    <p class="text-sm font-semibold text-dark-300 mb-1">BASE PRICE</p>
+                                    <p class="text-3xl font-bold text-green-400" id="base-price">₹0 Cr</p>
+                                </div>
+                            </div>
+                            <div class="bouncing-loader hidden py-16">
+                                <div></div>
+                                <div></div>
+                                <div></div>
+                            </div>
+                        </div>
+
+                        <!-- Bidding Info -->
+                        <div id="bidding-info" class="glass-effect rounded-2xl p-6 border border-dark-600 mb-8">
+                            <div class="text-center">
+                                <div class="mb-4">
+                                    <p class="text-lg text-dark-300 mb-2">Current Bid</p>
+                                    <p class="text-4xl font-bold text-yellow-400" id="current-bid">₹0 Cr</p>
+                                </div>
+                                <div>
+                                    <p class="text-lg text-dark-300 mb-2">Current Bidder</p>
+                                    <p class="text-2xl font-bold text-primary-400" id="current-bidder">None</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Bidding Controls -->
+                        <div id="bidding-controls" class="flex justify-center gap-6">
+                            <button id="bid-half-cr-btn" class="bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white font-bold py-4 px-10 rounded-xl transition-all duration-300 transform hover:scale-105 shadow-lg text-xl">
+                                +₹0.5 Cr
+                            </button>
+                            <button id="bid-one-cr-btn" class="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-bold py-4 px-10 rounded-xl transition-all duration-300 transform hover:scale-105 shadow-lg text-xl">
+                                +₹1 Cr
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Right Panel: Team Compositions & Visualizations -->
+                    <div class="xl:col-span-3 space-y-6">
+                        <!-- Team Compositions List -->
+                        <div class="glass-effect rounded-2xl p-6 border border-dark-600 h-[350px]">
+                            <div class="flex items-center mb-6">
+                                <div class="w-10 h-10 bg-gradient-to-r from-purple-500 to-purple-700 rounded-xl flex items-center justify-center mr-3">
+                                    <span class="text-lg">🏆</span>
+                                </div>
+                                <h3 class="text-xl font-bold text-white">Teams</h3>
+                            </div>
+                            <div id="team-compositions-list" class="overflow-y-auto h-[200px] space-y-4">
+                                <!-- Team compositions will be injected here -->
+                            </div>
+                            <div class="mt-4 flex gap-3">
+                                <button id="save-teams-btn" class="flex-1 bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white font-bold py-2 px-4 rounded-lg transition-all duration-300 text-sm">
+                                    JSON
+                                </button>
+                                <button id="save-teams-csv-btn" class="flex-1 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-bold py-2 px-4 rounded-lg transition-all duration-300 text-sm">
+                                    CSV
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Team Composition Visualization -->
+                        <div class="glass-effect rounded-2xl p-6 border border-dark-600 h-[350px]">
+                            <div class="flex items-center mb-6">
+                                <div class="w-10 h-10 bg-gradient-to-r from-blue-500 to-blue-700 rounded-xl flex items-center justify-center mr-3">
+                                    <span class="text-lg">📊</span>
+                                </div>
+                                <h3 class="text-xl font-bold text-white">Role Distribution</h3>
+                            </div>
+                            <div class="h-[250px]">
+                                <canvas id="team-composition-chart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Results Screen -->
+            <div id="results-screen" class="hidden glass-effect rounded-3xl shadow-2xl overflow-hidden">
+                <!-- Header -->
+                <div class="bg-gradient-to-r from-green-600 to-emerald-800 px-12 py-16 text-center">
+                    <h2 class="text-6xl font-bold mb-6 text-white">🏆 Auction Complete!</h2>
+                    <p class="text-xl text-green-100">All teams have been finalized. Check out the results below.</p>
+                </div>
+
+                <div class="p-12">
+                    <!-- Auction Statistics -->
+                    <div id="auction-statistics" class="mb-12">
+                        <div class="text-center mb-8">
+                            <h3 class="text-3xl font-bold text-white mb-2">Auction Statistics</h3>
+                            <p class="text-dark-300 text-lg">Key highlights from the auction</p>
+                        </div>
+
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+                            <div class="glass-effect rounded-2xl p-8 border border-dark-600 text-center card-hover">
+                                <div class="w-16 h-16 bg-gradient-to-r from-green-500 to-emerald-600 rounded-2xl flex items-center justify-center mx-auto mb-6">
+                                    <span class="text-2xl">💰</span>
+                                </div>
+                                <h4 class="text-lg font-semibold text-green-400 mb-4">Most Expensive Player</h4>
+                                <div id="most-expensive-player">
+                                    <p id="expensive-player-name" class="text-2xl font-bold text-white mb-2">-</p>
+                                    <p id="expensive-player-price" class="text-xl text-green-400 mb-2">-</p>
+                                    <p id="expensive-player-buyer" class="text-sm text-dark-300">-</p>
+                                </div>
+                            </div>
+
+                            <div class="glass-effect rounded-2xl p-8 border border-dark-600 text-center card-hover">
+                                <div class="w-16 h-16 bg-gradient-to-r from-blue-500 to-blue-700 rounded-2xl flex items-center justify-center mx-auto mb-6">
+                                    <span class="text-2xl">📊</span>
+                                </div>
+                                <h4 class="text-lg font-semibold text-blue-400 mb-4">Average Price</h4>
+                                <p id="average-price" class="text-3xl font-bold text-blue-400">-</p>
+                            </div>
+
+                            <div class="glass-effect rounded-2xl p-8 border border-dark-600 text-center card-hover">
+                                <div class="w-16 h-16 bg-gradient-to-r from-purple-500 to-purple-700 rounded-2xl flex items-center justify-center mx-auto mb-6">
+                                    <span class="text-2xl">👥</span>
+                                </div>
+                                <h4 class="text-lg font-semibold text-purple-400 mb-4">Players Sold</h4>
+                                <p id="total-players-sold" class="text-3xl font-bold text-purple-400">-</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Visualizations Section -->
+                    <div class="mb-12">
+                        <div class="text-center mb-8">
+                            <h3 class="text-3xl font-bold text-white mb-2">Auction Analytics</h3>
+                            <p class="text-dark-300 text-lg">Visual insights from the completed auction</p>
+                        </div>
+
+                        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-12">
+                            <!-- Spending Distribution Chart -->
+                            <div class="glass-effect rounded-2xl p-8 border border-dark-600">
+                                <div class="flex items-center mb-6">
+                                    <div class="w-12 h-12 bg-gradient-to-r from-green-500 to-emerald-600 rounded-xl flex items-center justify-center mr-4">
+                                        <span class="text-xl">💰</span>
+                                    </div>
+                                    <h4 class="text-xl font-bold text-white">Team Spending</h4>
+                                </div>
+                                <div class="h-80">
+                                    <canvas id="spending-chart"></canvas>
+                                </div>
+                            </div>
+
+                            <!-- Role Distribution Chart -->
+                            <div class="glass-effect rounded-2xl p-8 border border-dark-600">
+                                <div class="flex items-center mb-6">
+                                    <div class="w-12 h-12 bg-gradient-to-r from-blue-500 to-blue-700 rounded-xl flex items-center justify-center mr-4">
+                                        <span class="text-xl">👥</span>
+                                    </div>
+                                    <h4 class="text-xl font-bold text-white">Overall Role Distribution</h4>
+                                </div>
+                                <div class="h-80">
+                                    <canvas id="role-distribution-chart"></canvas>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Price Trends Over Time -->
+                        <div class="glass-effect rounded-2xl p-8 border border-dark-600 mb-12">
+                            <div class="flex items-center mb-6">
+                                <div class="w-12 h-12 bg-gradient-to-r from-purple-500 to-purple-700 rounded-xl flex items-center justify-center mr-4">
+                                    <span class="text-xl">📈</span>
+                                </div>
+                                <h4 class="text-xl font-bold text-white">Auction Price Trends</h4>
+                            </div>
+                            <div class="h-80">
+                                <canvas id="final-trends-chart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Teams Display -->
+                    <div class="mb-12">
+                        <div class="text-center mb-8">
+                            <h3 class="text-3xl font-bold text-white mb-2">Final Teams</h3>
+                            <p class="text-dark-300 text-lg">Complete squad compositions for all teams</p>
+                        </div>
+                        <div id="teams-display" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-8">
+                            <!-- Team cards will be generated here -->
+                        </div>
+                    </div>
+
+                    <!-- Export Button -->
+                    <div class="text-center">
+                        <button id="save-teams-excel-btn" class="bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white font-bold py-4 px-12 rounded-2xl transition-all duration-300 transform hover:scale-105 shadow-lg text-xl">
+                            📊 Export to Excel
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <script>
+        const socket = io("http://" + document.domain + ":" + location.port);
+        let username = '';
+        let roomCode = '';
+        let isOwner = false;
+        let playersData = [];
+        let currentBid = 0;
+        let roomSettings = {
+            max_players: 8,
+            squad_size: 11,
+            auction_order: 'random',
+            team_purse: 100
+        };
+
+        // UI Elements
+        const setupScreen = document.getElementById('setup-screen');
+        const lobbyScreen = document.getElementById('lobby-screen');
+        const auctionScreen = document.getElementById('auction-screen');
+        const resultsScreen = document.getElementById('results-screen');
+        
+        // --- Setup Screen Logic ---
+        const createUsernameInput = document.getElementById('create-username');
+        const createTeamNameInput = document.getElementById('create-team-name');
+        const playerCsvInput = document.getElementById('player-csv');
+        const createRoomBtn = document.getElementById('create-room-btn');
+        
+        const joinUsernameInput = document.getElementById('join-username');
+        const teamNameInput = document.getElementById('team-name-input');
+        const roomCodeInput = document.getElementById('room-code-input');
+        const joinRoomBtn = document.getElementById('join-room-btn');
+
+        // --- Lobby Screen Logic ---
+        const roomCodeDisplay = document.getElementById('room-code-display');
+        const playerList = document.getElementById('player-list');
+        const ownerControls = document.getElementById('owner-controls');
+        const startAuctionBtn = document.getElementById('start-auction-btn');
+        const roomSettingsDiv = document.getElementById('room-settings');
+        const maxPlayersSelect = document.getElementById('max-players-select');
+        const squadSizeSelect = document.getElementById('squad-size-select');
+        const teamPurseSelect = document.getElementById('team-purse-select');
+        const auctionOrderSelect = document.getElementById('auction-order-select');
+        const updateSettingsBtn = document.getElementById('update-settings-btn');
+        
+        // --- Auction Screen Logic ---
+        const timerDisplay = document.getElementById('timer-display');
+        const playerNameEl = document.getElementById('player-name');
+        const playerRoleEl = document.getElementById('player-role');
+        const playerNationalityEl = document.getElementById('player-nationality');
+        const playerOverallEl = document.querySelector('#player-overall span');
+        const basePriceEl = document.getElementById('base-price');
+        const currentBidEl = document.getElementById('current-bid');
+        const currentBidderEl = document.getElementById('current-bidder');
+        const soldPlayersList = document.getElementById('sold-players-list');
+        const bidHalfCrBtn = document.getElementById('bid-half-cr-btn');
+        const bidOneCrBtn = document.getElementById('bid-one-cr-btn');
+        const playerDetailsDiv = document.getElementById('player-details');
+        const bouncingLoader = document.querySelector('.bouncing-loader');
+        const auctionOwnerControls = document.getElementById('auction-owner-controls');
+        const skipPlayerBtn = document.getElementById('skip-player-btn');
+        const endAuctionBtn = document.getElementById('end-auction-btn');
+        const teamCompositionsList = document.getElementById('team-compositions-list');
+
+        // Add event listeners for auction screen save buttons
+        let currentCompositions = {};
+        let auctionTrendsChart = null;
+        let teamCompositionChart = null;
+        let spendingChart = null;
+        let roleDistributionChart = null;
+        let finalTrendsChart = null;
+        let auctionData = {
+            soldPlayers: [],
+            priceHistory: []
+        };
+
+        // --- Results Screen Logic ---
+        const teamsDisplay = document.getElementById('teams-display');
+        const saveTeamsExcelBtn = document.getElementById('save-teams-excel-btn');
+        const expensivePlayerName = document.getElementById('expensive-player-name');
+        const expensivePlayerPrice = document.getElementById('expensive-player-price');
+        const expensivePlayerBuyer = document.getElementById('expensive-player-buyer');
+        const averagePrice = document.getElementById('average-price');
+        const totalPlayersSold = document.getElementById('total-players-sold');
+
+        function formatCurrency(amount) {
+            if (amount >= 10000000) {
+                return '₹' + (amount / 10000000).toFixed(2) + ' Cr';
+            }
+            return '₹' + amount;
+        }
+
+        // Chart configuration
+        const chartOptions = {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    labels: {
+                        color: '#e2e8f0',
+                        font: {
+                            family: 'Inter'
+                        }
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    ticks: {
+                        color: '#94a3b8'
+                    },
+                    grid: {
+                        color: 'rgba(148, 163, 184, 0.1)'
+                    }
+                },
+                y: {
+                    ticks: {
+                        color: '#94a3b8'
+                    },
+                    grid: {
+                        color: 'rgba(148, 163, 184, 0.1)'
+                    }
+                }
+            }
+        };
+
+        function initializeAuctionTrendsChart() {
+            const ctx = document.getElementById('auction-trends-chart');
+            if (!ctx) return;
+
+            auctionTrendsChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [{
+                        label: 'Sale Price (₹ Cr)',
+                        data: [],
+                        borderColor: 'rgb(59, 130, 246)',
+                        backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                        tension: 0.4,
+                        fill: true
+                    }]
+                },
+                options: {
+                    ...chartOptions,
+                    scales: {
+                        ...chartOptions.scales,
+                        y: {
+                            ...chartOptions.scales.y,
+                            beginAtZero: true,
+                            title: {
+                                display: true,
+                                text: 'Price (₹ Cr)',
+                                color: '#94a3b8'
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        function initializeTeamCompositionChart() {
+            const ctx = document.getElementById('team-composition-chart');
+            if (!ctx) return;
+
+            teamCompositionChart = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Batsman', 'Bowler', 'All-rounder', 'Wicket-keeper'],
+                    datasets: [{
+                        data: [0, 0, 0, 0],
+                        backgroundColor: [
+                            'rgba(59, 130, 246, 0.8)',
+                            'rgba(239, 68, 68, 0.8)',
+                            'rgba(34, 197, 94, 0.8)',
+                            'rgba(245, 158, 11, 0.8)'
+                        ],
+                        borderColor: [
+                            'rgb(59, 130, 246)',
+                            'rgb(239, 68, 68)',
+                            'rgb(34, 197, 94)',
+                            'rgb(245, 158, 11)'
+                        ],
+                        borderWidth: 2
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: {
+                                color: '#e2e8f0',
+                                font: {
+                                    family: 'Inter'
+                                },
+                                padding: 20
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        function updateAuctionTrendsChart() {
+            if (!auctionTrendsChart) return;
+
+            const soldPlayers = auctionData.soldPlayers.filter(p => p.winner);
+            const labels = soldPlayers.map(p => p.player.name);
+            const prices = soldPlayers.map(p => p.final_bid / 10000000);
+
+            auctionTrendsChart.data.labels = labels;
+            auctionTrendsChart.data.datasets[0].data = prices;
+            auctionTrendsChart.update();
+        }
+
+        function updateTeamCompositionChart() {
+            if (!teamCompositionChart || !currentCompositions) return;
+
+            const totalRoles = { 'Batsman': 0, 'Bowler': 0, 'All-rounder': 0, 'Wicket-keeper': 0 };
+
+            Object.values(currentCompositions).forEach(team => {
+                Object.entries(team.roles).forEach(([role, count]) => {
+                    if (totalRoles.hasOwnProperty(role)) {
+                        totalRoles[role] += count;
+                    }
+                });
+            });
+
+            teamCompositionChart.data.datasets[0].data = Object.values(totalRoles);
+            teamCompositionChart.update();
+        }
+
+        function initializeResultsCharts(teams, soldPlayers) {
+            // Spending Chart
+            const spendingCtx = document.getElementById('spending-chart');
+            if (spendingCtx) {
+                const teamNames = Object.keys(teams);
+                const teamSpending = teamNames.map(team => {
+                    return teams[team].reduce((sum, p) => sum + p.final_bid, 0) / 10000000;
+                });
+
+                spendingChart = new Chart(spendingCtx, {
+                    type: 'bar',
+                    data: {
+                        labels: teamNames,
+                        datasets: [{
+                            label: 'Total Spending (₹ Cr)',
+                            data: teamSpending,
+                            backgroundColor: 'rgba(34, 197, 94, 0.8)',
+                            borderColor: 'rgb(34, 197, 94)',
+                            borderWidth: 2
+                        }]
+                    },
+                    options: {
+                        ...chartOptions,
+                        scales: {
+                            ...chartOptions.scales,
+                            y: {
+                                ...chartOptions.scales.y,
+                                beginAtZero: true,
+                                title: {
+                                    display: true,
+                                    text: 'Spending (₹ Cr)',
+                                    color: '#94a3b8'
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+
+            // Role Distribution Chart
+            const roleCtx = document.getElementById('role-distribution-chart');
+            if (roleCtx) {
+                const allRoles = { 'Batsman': 0, 'Bowler': 0, 'All-rounder': 0, 'Wicket-keeper': 0 };
+
+                Object.values(teams).forEach(teamPlayers => {
+                    teamPlayers.forEach(p => {
+                        if (allRoles.hasOwnProperty(p.player.role)) {
+                            allRoles[p.player.role]++;
+                        }
+                    });
+                });
+
+                roleDistributionChart = new Chart(roleCtx, {
+                    type: 'pie',
+                    data: {
+                        labels: Object.keys(allRoles),
+                        datasets: [{
+                            data: Object.values(allRoles),
+                            backgroundColor: [
+                                'rgba(59, 130, 246, 0.8)',
+                                'rgba(239, 68, 68, 0.8)',
+                                'rgba(34, 197, 94, 0.8)',
+                                'rgba(245, 158, 11, 0.8)'
+                            ],
+                            borderColor: [
+                                'rgb(59, 130, 246)',
+                                'rgb(239, 68, 68)',
+                                'rgb(34, 197, 94)',
+                                'rgb(245, 158, 11)'
+                            ],
+                            borderWidth: 2
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                position: 'bottom',
+                                labels: {
+                                    color: '#e2e8f0',
+                                    font: {
+                                        family: 'Inter'
+                                    },
+                                    padding: 20
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+
+            // Final Trends Chart
+            const trendsCtx = document.getElementById('final-trends-chart');
+            if (trendsCtx) {
+                const soldPlayersWithWinners = soldPlayers.filter(p => p.winner);
+                const labels = soldPlayersWithWinners.map(p => p.player.name);
+                const prices = soldPlayersWithWinners.map(p => p.final_bid / 10000000);
+
+                finalTrendsChart = new Chart(trendsCtx, {
+                    type: 'line',
+                    data: {
+                        labels: labels,
+                        datasets: [{
+                            label: 'Sale Price (₹ Cr)',
+                            data: prices,
+                            borderColor: 'rgb(147, 51, 234)',
+                            backgroundColor: 'rgba(147, 51, 234, 0.1)',
+                            tension: 0.4,
+                            fill: true,
+                            pointBackgroundColor: 'rgb(147, 51, 234)',
+                            pointBorderColor: '#fff',
+                            pointBorderWidth: 2,
+                            pointRadius: 5
+                        }]
+                    },
+                    options: {
+                        ...chartOptions,
+                        scales: {
+                            ...chartOptions.scales,
+                            x: {
+                                ...chartOptions.scales.x,
+                                title: {
+                                    display: true,
+                                    text: 'Auction Sequence',
+                                    color: '#94a3b8'
+                                }
+                            },
+                            y: {
+                                ...chartOptions.scales.y,
+                                beginAtZero: true,
+                                title: {
+                                    display: true,
+                                    text: 'Price (₹ Cr)',
+                                    color: '#94a3b8'
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+        }
+
+        function showScreen(screen) {
+            setupScreen.classList.add('hidden');
+            lobbyScreen.classList.add('hidden');
+            auctionScreen.classList.add('hidden');
+            resultsScreen.classList.add('hidden');
+            screen.classList.remove('hidden');
+        }
+        
+        function parseCSV(csvText) {
+            const lines = csvText.split('\n').filter(line => line.trim() !== '');
+            const headers = lines[0].split(',').map(h => h.trim());
+            const players = [];
+            for (let i = 1; i < lines.length; i++) {
+                const values = lines[i].split(',').map(v => v.trim());
+                if (values.length === headers.length) {
+                    const player = {
+                        name: values[0],
+                        overall: parseInt(values[1]),
+                        role: values[2],
+                        nationality: values[3]
+                        // base_price will be calculated on the server side
+                    };
+                    players.push(player);
+                }
+            }
+            return players;
+        }
+
+        createRoomBtn.addEventListener('click', () => {
+            username = createUsernameInput.value.trim();
+            const teamName = createTeamNameInput.value.trim();
+            const file = playerCsvInput.files[0];
+            if (!username) {
+                alert('Please enter your name.');
+                return;
+            }
+            if (!file) {
+                alert('Please upload a player CSV file.');
+                return;
+            }
+
+            const reader = new FileReader();
+            reader.onload = function(event) {
+                const csvData = event.target.result;
+                playersData = parseCSV(csvData);
+                if (playersData.length === 0) {
+                    alert('Could not parse any players from the CSV. Please check the format.');
+                    return;
+                }
+                isOwner = true;
+                socket.emit('create_room', {
+                    username: username,
+                    team_name: teamName || username, // Use team name if provided, else username
+                    players: playersData
+                });
+            };
+            reader.readAsText(file);
+        });
+
+        joinRoomBtn.addEventListener('click', () => {
+            username = joinUsernameInput.value.trim();
+            const teamName = teamNameInput.value.trim();
+            roomCode = roomCodeInput.value.trim().toUpperCase();
+            if (!username) {
+                alert('Please enter your name.');
+                return;
+            }
+            if (!roomCode) {
+                alert('Please enter a room code.');
+                return;
+            }
+            socket.emit('join_room', {
+                username: username,
+                team_name: teamName || username, // Use team name if provided, else username
+                room_code: roomCode
+            });
+        });
+        
+        startAuctionBtn.addEventListener('click', () => {
+            socket.emit('start_auction', { room_code: roomCode });
+        });
+
+        updateSettingsBtn.addEventListener('click', () => {
+            const settings = {
+                room_code: roomCode,
+                username: username,
+                max_players: parseInt(maxPlayersSelect.value),
+                squad_size: parseInt(squadSizeSelect.value),
+                team_purse: parseInt(teamPurseSelect.value),
+                auction_order: auctionOrderSelect.value
+            };
+            socket.emit('update_room_settings', settings);
+        });
+
+        skipPlayerBtn.addEventListener('click', () => {
+            if (confirm('Are you sure you want to skip this player?')) {
+                socket.emit('skip_player', { room_code: roomCode });
+            }
+        });
+
+        endAuctionBtn.addEventListener('click', () => {
+            if (confirm('Are you sure you want to end the auction early?')) {
+                socket.emit('end_auction_early', { room_code: roomCode });
+            }
+        });
+
+        bidHalfCrBtn.addEventListener('click', () => {
+            const bidAmount = currentBid + 5000000; // 0.5 Cr
+            socket.emit('place_bid', { room_code: roomCode, bid_amount: bidAmount, bidder: username });
+        });
+
+        bidOneCrBtn.addEventListener('click', () => {
+            const bidAmount = currentBid + 10000000; // 1 Cr
+            socket.emit('place_bid', { room_code: roomCode, bid_amount: bidAmount, bidder: username });
+        });
+
+        // Socket.IO Event Handlers
+        socket.on('room_created', (data) => {
+            roomCode = data.room_code;
+            showScreen(lobbyScreen);
+            roomCodeDisplay.textContent = roomCode;
+            updatePlayerList(data.players);
+            if (isOwner) {
+                ownerControls.classList.remove('hidden');
+                roomSettingsDiv.classList.remove('hidden');
+
+                // Update settings UI with server values
+                if (data.room_settings) {
+                    maxPlayersSelect.value = data.room_settings.max_players;
+                    squadSizeSelect.value = data.room_settings.squad_size;
+                    teamPurseSelect.value = data.room_settings.team_purse;
+                    auctionOrderSelect.value = data.room_settings.auction_order;
+                }
+            }
+        });
+
+        socket.on('room_joined', (data) => {
+            roomCode = data.room_code;
+            showScreen(lobbyScreen);
+            roomCodeDisplay.textContent = roomCode;
+            updatePlayerList(data.players);
+        });
+        
+        socket.on('player_joined', (data) => {
+            updatePlayerList(data.players);
+        });
+
+        function updatePlayerList(players) {
+            playerList.innerHTML = '';
+            players.forEach((player, index) => {
+                const playerCard = document.createElement('div');
+                playerCard.className = 'glass-effect rounded-xl p-4 border border-dark-600 card-hover';
+                playerCard.innerHTML = `
+                    <div class="flex items-center">
+                        <div class="w-10 h-10 bg-gradient-to-r from-primary-500 to-primary-700 rounded-full flex items-center justify-center mr-3 text-white font-bold">
+                            ${index + 1}
+                        </div>
+                        <div>
+                            <p class="font-semibold text-white">${player}</p>
+                            <p class="text-sm text-dark-300">Team ${index + 1}</p>
+                        </div>
+                    </div>
+                `;
+                playerList.appendChild(playerCard);
+            });
+        }
+
+        function updateTeamCompositions(compositions) {
+            currentCompositions = compositions; // Store for export functionality
+            teamCompositionsList.innerHTML = '';
+
+            for (const [bidder, data] of Object.entries(compositions)) {
+                const totalSpent = formatCurrency(data.total_spent);
+                const remainingPurse = formatCurrency(data.remaining_purse);
+                const playerCount = data.players.length;
+
+                // Create role distribution visualization
+                const roles = data.roles;
+                const roleColors = {
+                    'Batsman': 'from-blue-500 to-blue-600',
+                    'Bowler': 'from-red-500 to-red-600',
+                    'All-rounder': 'from-green-500 to-green-600',
+                    'Wicket-keeper': 'from-yellow-500 to-yellow-600'
+                };
+
+                let rolesHtml = '';
+                for (const [role, count] of Object.entries(roles)) {
+                    if (count > 0) {
+                        rolesHtml += `
+                            <div class="flex items-center justify-between text-xs mb-2">
+                                <span class="flex items-center">
+                                    <div class="w-3 h-3 bg-gradient-to-r ${roleColors[role] || 'from-gray-500 to-gray-600'} rounded-full mr-2"></div>
+                                    <span class="text-dark-200">${role}</span>
+                                </span>
+                                <span class="font-semibold text-white">${count}</span>
+                            </div>`;
+                    }
+                }
+
+                const teamCard = `
+                    <div class="bg-dark-800 rounded-xl p-4 border border-dark-600">
+                        <div class="flex items-center mb-3">
+                            <div class="w-8 h-8 bg-gradient-to-r from-primary-500 to-primary-700 rounded-lg flex items-center justify-center mr-3">
+                                <span class="text-white font-bold text-sm">${bidder.charAt(0).toUpperCase()}</span>
+                            </div>
+                            <h4 class="font-bold text-white text-sm">${bidder}</h4>
+                        </div>
+                        <div class="space-y-2 mb-3">
+                            <div class="flex justify-between text-xs">
+                                <span class="text-dark-300">Players:</span>
+                                <span class="font-semibold text-white">${playerCount}</span>
+                            </div>
+                            <div class="flex justify-between text-xs">
+                                <span class="text-dark-300">Spent:</span>
+                                <span class="font-semibold text-green-400">${totalSpent}</span>
+                            </div>
+                            <div class="flex justify-between text-xs">
+                                <span class="text-dark-300">Remaining:</span>
+                                <span class="font-semibold text-yellow-400">${remainingPurse}</span>
+                            </div>
+                        </div>
+                        <div class="border-t border-dark-600 pt-3">
+                            ${rolesHtml}
+                        </div>
+                    </div>`;
+                teamCompositionsList.innerHTML += teamCard;
+            }
+        }
+
+        // Add event listeners for auction screen save buttons (only add once)
+        let auctionSaveListenersAdded = false;
+        function addAuctionSaveListeners() {
+            if (auctionSaveListenersAdded) return;
+            auctionSaveListenersAdded = true;
+
+            // JSON Export for auction screen
+            document.addEventListener('click', (e) => {
+                if (e.target && e.target.id === 'save-teams-btn' && currentCompositions) {
+                    const dataStr = JSON.stringify(currentCompositions, null, 2);
+                    const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
+
+                    const linkElement = document.createElement('a');
+                    linkElement.setAttribute('href', dataUri);
+                    linkElement.setAttribute('download', 'cricket_auction_live_teams.json');
+                    linkElement.click();
+                }
+
+                // CSV Export for auction screen
+                if (e.target && e.target.id === 'save-teams-csv-btn' && currentCompositions) {
+                    const wb = XLSX.utils.book_new();
+
+                    // Create a summary sheet
+                    const summaryData = [
+                        ['Team Name', 'Players Count', 'Total Spent (Cr)', 'Remaining Purse (Cr)', 'Batsmen', 'Bowlers', 'All-rounders', 'Wicket-keepers']
+                    ];
+
+                    for (const [teamName, teamData] of Object.entries(currentCompositions)) {
+                        summaryData.push([
+                            teamName,
+                            teamData.players.length,
+                            (teamData.total_spent / 10000000).toFixed(2),
+                            (teamData.remaining_purse / 10000000).toFixed(2),
+                            teamData.roles.Batsman || 0,
+                            teamData.roles.Bowler || 0,
+                            teamData.roles['All-rounder'] || 0,
+                            teamData.roles['Wicket-keeper'] || 0
+                        ]);
+                    }
+
+                    const summaryWs = XLSX.utils.aoa_to_sheet(summaryData);
+                    XLSX.utils.book_append_sheet(wb, summaryWs, 'Summary');
+
+                    // Create individual sheets for each team
+                    for (const [teamName, teamData] of Object.entries(currentCompositions)) {
+                        const teamSheetData = [
+                            ['Player Name', 'Role', 'Nationality', 'Overall Rating', 'Purchase Price (Cr)']
+                        ];
+
+                        teamData.players.forEach(player => {
+                            teamSheetData.push([
+                                player.name,
+                                player.role,
+                                player.nationality,
+                                player.overall,
+                                (player.price / 10000000).toFixed(2)
+                            ]);
+                        });
+
+                        // Add team summary at the bottom
+                        teamSheetData.push([]);
+                        teamSheetData.push(['Team Summary']);
+                        teamSheetData.push(['Total Players', teamData.players.length]);
+                        teamSheetData.push(['Total Spent (Cr)', (teamData.total_spent / 10000000).toFixed(2)]);
+                        teamSheetData.push(['Remaining Purse (Cr)', (teamData.remaining_purse / 10000000).toFixed(2)]);
+                        teamSheetData.push(['Batsmen', teamData.roles.Batsman || 0]);
+                        teamSheetData.push(['Bowlers', teamData.roles.Bowler || 0]);
+                        teamSheetData.push(['All-rounders', teamData.roles['All-rounder'] || 0]);
+                        teamSheetData.push(['Wicket-keepers', teamData.roles['Wicket-keeper'] || 0]);
+
+                        const teamWs = XLSX.utils.aoa_to_sheet(teamSheetData);
+                        // Clean team name for sheet name (remove special characters)
+                        const cleanTeamName = teamName.replace(/[^\w\s]/gi, '').substring(0, 31);
+                        XLSX.utils.book_append_sheet(wb, teamWs, cleanTeamName);
+                    }
+
+                    // Save the file
+                    XLSX.writeFile(wb, 'cricket_auction_live_teams.xlsx');
+                }
+            });
+        }
+        
+        function updateAuctionUI(data) {
+             playerDetailsDiv.classList.remove('hidden');
+             bouncingLoader.classList.add('hidden');
+
+            playerNameEl.textContent = data.player.name;
+            playerRoleEl.textContent = data.player.role;
+            playerNationalityEl.textContent = data.player.nationality;
+            playerOverallEl.textContent = data.player.overall;
+            basePriceEl.textContent = formatCurrency(data.player.base_price);
+            
+            currentBid = data.current_bid;
+            currentBidEl.textContent = formatCurrency(data.current_bid);
+            currentBidderEl.textContent = data.current_bidder || 'None';
+        }
+
+        socket.on('room_settings_updated', (data) => {
+            // Update local settings display
+            maxPlayersSelect.value = data.max_players;
+            squadSizeSelect.value = data.squad_size;
+            teamPurseSelect.value = data.team_purse;
+            auctionOrderSelect.value = data.auction_order;
+        });
+
+        socket.on('team_compositions_update', (data) => {
+            updateTeamCompositions(data.compositions);
+            updateTeamCompositionChart();
+        });
+
+        socket.on('auction_started', (data) => {
+            showScreen(auctionScreen);
+            updateAuctionUI(data);
+
+            // Show owner controls if user is owner
+            if (isOwner) {
+                auctionOwnerControls.classList.remove('hidden');
+            }
+
+            // Initialize charts
+            setTimeout(() => {
+                initializeAuctionTrendsChart();
+                initializeTeamCompositionChart();
+            }, 100);
+
+            // Add save button listeners for auction screen
+            addAuctionSaveListeners();
+
+            // Request initial team compositions
+            socket.emit('get_team_compositions', { room_code: roomCode });
+        });
+
+        socket.on('bid_updated', (data) => {
+            updateAuctionUI(data);
+            // Reset timer display to 15 when bid is updated
+            timerDisplay.textContent = 15;
+            // Request updated team compositions
+            socket.emit('get_team_compositions', { room_code: roomCode });
+        });
+
+        socket.on('timer_tick', (data) => {
+            timerDisplay.textContent = data.time;
+        });
+
+        socket.on('times_up', () => {
+            if(isOwner) {
+                socket.emit('sell_player', { room_code: roomCode });
+            }
+        });
+        
+        socket.on('player_sold', (data) => {
+            // Add to auction data for charts
+            auctionData.soldPlayers.push(data);
+
+            // Only add to sold players list if actually sold (not unsold)
+            if (data.winner) {
+                const soldPlayerCard = `
+                    <div class="bg-dark-800 rounded-xl p-4 border border-dark-600 mb-3">
+                        <div class="flex items-center mb-2">
+                            <div class="w-8 h-8 bg-gradient-to-r from-green-500 to-emerald-600 rounded-lg flex items-center justify-center mr-3">
+                                <span class="text-white text-xs">✓</span>
+                            </div>
+                            <p class="font-bold text-white text-sm">${data.player.name}</p>
+                        </div>
+                        <div class="space-y-1">
+                            <p class="text-xs text-dark-300">Sold to: <span class="text-primary-400 font-semibold">${data.winner}</span></p>
+                            <p class="text-xs text-green-400 font-semibold">Price: ${formatCurrency(data.final_bid)}</p>
+                        </div>
+                    </div>`;
+                soldPlayersList.innerHTML += soldPlayerCard;
+
+                // Auto-scroll to bottom
+                soldPlayersList.scrollTop = soldPlayersList.scrollHeight;
+
+                // Update auction trends chart
+                updateAuctionTrendsChart();
+            }
+
+            playerDetailsDiv.classList.add('hidden');
+            bouncingLoader.classList.remove('hidden');
+
+            // Request updated team compositions
+            socket.emit('get_team_compositions', { room_code: roomCode });
+        });
+
+        socket.on('next_player', (data) => {
+            timerDisplay.textContent = 15;
+            updateAuctionUI(data);
+            // Request updated team compositions for the new player
+            socket.emit('get_team_compositions', { room_code: roomCode });
+        });
+
+        socket.on('auction_complete', (data) => {
+            showScreen(resultsScreen);
+
+            // Display auction statistics
+            if (data.statistics) {
+                const stats = data.statistics;
+
+                if (stats.most_expensive) {
+                    expensivePlayerName.textContent = stats.most_expensive.player.name;
+                    expensivePlayerPrice.textContent = formatCurrency(stats.most_expensive.final_bid);
+                    expensivePlayerBuyer.textContent = `Bought by: ${stats.most_expensive.winner}`;
+                } else {
+                    expensivePlayerName.textContent = 'No players sold';
+                    expensivePlayerPrice.textContent = '-';
+                    expensivePlayerBuyer.textContent = '-';
+                }
+
+                averagePrice.textContent = formatCurrency(stats.average_price);
+                totalPlayersSold.textContent = stats.total_players_sold;
+            }
+
+            const teams = {};
+            data.sold_players.forEach(p => {
+                if (!p.winner) return;
+                if (!teams[p.winner]) {
+                    teams[p.winner] = [];
+                }
+                teams[p.winner].push(p);
+            });
+
+            // Initialize results charts
+            setTimeout(() => {
+                initializeResultsCharts(teams, data.sold_players);
+            }, 100);
+
+            teamsDisplay.innerHTML = '';
+            for (const teamOwner in teams) {
+                let playersHtml = '';
+                let totalSpent = 0;
+
+                teams[teamOwner].forEach(p => {
+                    totalSpent += p.final_bid;
+                    playersHtml += `
+                        <div class="flex justify-between items-center py-2 border-b border-dark-600 last:border-b-0">
+                            <div>
+                                <span class="text-white font-medium">${p.player.name}</span>
+                                <span class="text-xs text-dark-300 ml-2">${p.player.role}</span>
+                            </div>
+                            <span class="text-green-400 font-semibold">${formatCurrency(p.final_bid)}</span>
+                        </div>`;
+                });
+
+                const teamCard = `
+                    <div class="glass-effect rounded-2xl p-6 border border-dark-600 card-hover">
+                        <div class="flex items-center mb-6">
+                            <div class="w-12 h-12 bg-gradient-to-r from-primary-500 to-primary-700 rounded-xl flex items-center justify-center mr-4">
+                                <span class="text-white font-bold">${teamOwner.charAt(0).toUpperCase()}</span>
+                            </div>
+                            <div>
+                                <h3 class="text-xl font-bold text-white">${teamOwner}</h3>
+                                <p class="text-sm text-dark-300">${teams[teamOwner].length} players • ${formatCurrency(totalSpent)} spent</p>
+                            </div>
+                        </div>
+                        <div class="space-y-1 max-h-64 overflow-y-auto">
+                            ${playersHtml}
+                        </div>
+                    </div>`;
+                teamsDisplay.innerHTML += teamCard;
+            }
+
+            // Excel Export functionality for results screen
+            saveTeamsExcelBtn.addEventListener('click', () => {
+                // Create a workbook with multiple sheets
+                const wb = XLSX.utils.book_new();
+
+                // Create a summary sheet
+                const summaryData = [
+                    ['Team Name', 'Players Count', 'Total Spent (Cr)']
+                ];
+
+                for (const [teamName, teamPlayers] of Object.entries(teams)) {
+                    const totalSpent = teamPlayers.reduce((sum, p) => sum + p.final_bid, 0);
+                    summaryData.push([
+                        teamName,
+                        teamPlayers.length,
+                        (totalSpent / 10000000).toFixed(2)
+                    ]);
+                }
+
+                const summaryWs = XLSX.utils.aoa_to_sheet(summaryData);
+                XLSX.utils.book_append_sheet(wb, summaryWs, 'Summary');
+
+                // Create individual sheets for each team
+                for (const [teamName, teamPlayers] of Object.entries(teams)) {
+                    const teamSheetData = [
+                        ['Player Name', 'Role', 'Nationality', 'Overall Rating', 'Purchase Price (Cr)']
+                    ];
+
+                    teamPlayers.forEach(p => {
+                        teamSheetData.push([
+                            p.player.name,
+                            p.player.role,
+                            p.player.nationality,
+                            p.player.overall,
+                            (p.final_bid / 10000000).toFixed(2)
+                        ]);
+                    });
+
+                    // Add team summary at the bottom
+                    const totalSpent = teamPlayers.reduce((sum, p) => sum + p.final_bid, 0);
+                    teamSheetData.push([]);
+                    teamSheetData.push(['Team Summary']);
+                    teamSheetData.push(['Total Players', teamPlayers.length]);
+                    teamSheetData.push(['Total Spent (Cr)', (totalSpent / 10000000).toFixed(2)]);
+
+                    const teamWs = XLSX.utils.aoa_to_sheet(teamSheetData);
+                    // Clean team name for sheet name (remove special characters)
+                    const cleanTeamName = teamName.replace(/[^\w\s]/gi, '').substring(0, 31);
+                    XLSX.utils.book_append_sheet(wb, teamWs, cleanTeamName);
+                }
+
+                // Save the file
+                XLSX.writeFile(wb, 'cricket_auction_final_results.xlsx');
+            });
+        });
+
+        socket.on('error', (data) => {
+            alert('Error: ' + data.message);
+        });
+    </script>
+</body>
+</html>

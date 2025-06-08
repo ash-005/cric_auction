@@ -1,0 +1,533 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Personal Learning Framework</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background-color: #f9fafb;
+            line-height: 1.6;
+            color: #374151;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 24px;
+            min-height: 100vh;
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 48px;
+        }
+        
+        .header h1 {
+            font-size: 2rem;
+            font-weight: bold;
+            color: #111827;
+            margin-bottom: 8px;
+        }
+        
+        .header p {
+            color: #6b7280;
+        }
+        
+        .frameworks-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 24px;
+            margin-bottom: 48px;
+        }
+        
+        .framework-card {
+            padding: 24px;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.2s;
+            border: 2px solid transparent;
+        }
+        
+        .framework-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+        }
+        
+        .framework-card.active {
+            color: white;
+            transform: scale(1.02);
+            box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+        }
+        
+        .framework-card.inactive {
+            background: white;
+            color: #374151;
+        }
+        
+        .framework-card.context-first { background: #3b82f6; }
+        .framework-card.spiral-mastery { background: #8b5cf6; }
+        .framework-card.aesthetic-logic { background: #ec4899; }
+        
+        .framework-header {
+            display: flex;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+        
+        .framework-icon {
+            width: 24px;
+            height: 24px;
+            margin-right: 12px;
+        }
+        
+        .framework-title {
+            font-size: 1.25rem;
+            font-weight: 600;
+        }
+        
+        .framework-description {
+            font-size: 0.875rem;
+            opacity: 0.9;
+        }
+        
+        .section {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+            padding: 32px;
+            margin-bottom: 32px;
+        }
+        
+        .section-header {
+            display: flex;
+            align-items: center;
+            margin-bottom: 24px;
+        }
+        
+        .section-title {
+            font-size: 1.5rem;
+            font-weight: bold;
+            margin-left: 12px;
+        }
+        
+        .step {
+            display: flex;
+            align-items: center;
+            padding: 16px;
+            background: #f9fafb;
+            border-radius: 8px;
+            margin-bottom: 12px;
+        }
+        
+        .step-icon {
+            font-size: 1.5rem;
+            margin-right: 16px;
+        }
+        
+        .step-text {
+            flex: 1;
+        }
+        
+        .step-checkbox {
+            width: 20px;
+            height: 20px;
+            margin-left: 16px;
+        }
+        
+        .week-tabs {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-bottom: 24px;
+        }
+        
+        .week-tab {
+            padding: 8px 16px;
+            border-radius: 20px;
+            border: none;
+            font-size: 0.875rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .week-tab.active {
+            color: white;
+        }
+        
+        .week-tab.inactive {
+            background: #e5e7eb;
+            color: #374151;
+        }
+        
+        .week-tab.inactive:hover {
+            background: #d1d5db;
+        }
+        
+        .week-tab.planning { background: #10b981; }
+        .week-tab.building { background: #3b82f6; }
+        .week-tab.extracting { background: #8b5cf6; }
+        .week-tab.applying { background: #f59e0b; }
+        .week-tab.reflecting { background: #6366f1; }
+        
+        .activity {
+            display: flex;
+            align-items: center;
+            padding: 12px;
+            background: #f9fafb;
+            border-radius: 8px;
+            margin-bottom: 12px;
+        }
+        
+        .activity-arrow {
+            width: 16px;
+            height: 16px;
+            margin-right: 12px;
+            color: #6b7280;
+        }
+        
+        .interview-item {
+            border-left: 4px solid #3b82f6;
+            padding: 16px;
+            margin-bottom: 16px;
+        }
+        
+        .interview-challenge {
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+        
+        .interview-strategy {
+            color: #6b7280;
+            font-size: 0.875rem;
+            margin-bottom: 8px;
+        }
+        
+        .interview-action {
+            color: #3b82f6;
+            font-size: 0.875rem;
+            font-weight: 500;
+        }
+        
+        .tips-section {
+            margin-top: 32px;
+            padding: 16px;
+            background: #fef3c7;
+            border-left: 4px solid #f59e0b;
+            border-radius: 0 8px 8px 0;
+        }
+        
+        .tips-header {
+            display: flex;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+        
+        .tips-icon {
+            width: 20px;
+            height: 20px;
+            color: #d97706;
+            margin-right: 8px;
+        }
+        
+        .tips-title {
+            font-weight: 600;
+            color: #92400e;
+        }
+        
+        .tips-list {
+            color: #92400e;
+            font-size: 0.875rem;
+        }
+        
+        .tips-list li {
+            margin-bottom: 4px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Your Personal Learning Framework</h1>
+            <p>Designed for your context-first, passion-driven learning style</p>
+        </div>
+
+        <!-- Framework Selection -->
+        <div class="frameworks-grid">
+            <div class="framework-card context-first active" data-framework="context-first">
+                <div class="framework-header">
+                    <svg class="framework-icon" fill="currentColor" viewBox="0 0 20 20">
+                        <path d="M10 2L13 8L19 8L14.5 12L16 18L10 15L4 18L5.5 12L1 8L7 8L10 2Z"/>
+                    </svg>
+                    <h3 class="framework-title">Context-First Learning</h3>
+                </div>
+                <p class="framework-description">Start with passion projects, extract patterns naturally</p>
+            </div>
+
+            <div class="framework-card spiral-mastery inactive" data-framework="spiral-mastery">
+                <div class="framework-header">
+                    <svg class="framework-icon" fill="currentColor" viewBox="0 0 20 20">
+                        <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                    <h3 class="framework-title">Spiral Mastery Method</h3>
+                </div>
+                <p class="framework-description">Honor your cyclical learning pattern</p>
+            </div>
+
+            <div class="framework-card aesthetic-logic inactive" data-framework="aesthetic-logic">
+                <div class="framework-header">
+                    <svg class="framework-icon" fill="currentColor" viewBox="0 0 20 20">
+                        <path d="M7 3a1 1 0 000 2h6a1 1 0 100-2H7zM4 7a1 1 0 011-1h10a1 1 0 110 2H5a1 1 0 01-1-1zM2 11a2 2 0 012-2h12a2 2 0 012 2v4a2 2 0 01-2 2H4a2 2 0 01-2-2v-4z"/>
+                    </svg>
+                    <h3 class="framework-title">Aesthetic-Logic Bridge</h3>
+                </div>
+                <p class="framework-description">Combine your visual design sense with technical depth</p>
+            </div>
+        </div>
+
+        <!-- Active Framework Details -->
+        <div class="section">
+            <div class="section-header">
+                <svg class="framework-icon" fill="currentColor" viewBox="0 0 20 20">
+                    <path d="M10 2L13 8L19 8L14.5 12L16 18L10 15L4 18L5.5 12L1 8L7 8L10 2Z"/>
+                </svg>
+                <h2 class="section-title" id="active-framework-title">Context-First Learning</h2>
+            </div>
+            <div id="framework-steps">
+                <!-- Steps will be populated by JavaScript -->
+            </div>
+        </div>
+
+        <!-- Weekly Rhythm -->
+        <div class="section">
+            <div class="section-header">
+                <svg class="framework-icon" fill="currentColor" viewBox="0 0 20 20">
+                    <path d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zM4 8h12v8H4V8z"/>
+                </svg>
+                <h2 class="section-title">Your Weekly Learning Rhythm</h2>
+            </div>
+            <div class="week-tabs">
+                <button class="week-tab planning active" data-week="planning">Planning Phase</button>
+                <button class="week-tab building inactive" data-week="building">Building Phase (Mon-Wed)</button>
+                <button class="week-tab extracting inactive" data-week="extracting">Pattern Extraction (Thu)</button>
+                <button class="week-tab applying inactive" data-week="applying">Application (Fri)</button>
+                <button class="week-tab reflecting inactive" data-week="reflecting">Reflection (Weekend)</button>
+            </div>
+            <div id="week-activities">
+                <!-- Activities will be populated by JavaScript -->
+            </div>
+        </div>
+
+        <!-- Interview Prep Strategy -->
+        <div class="section">
+            <div class="section-header">
+                <svg class="framework-icon" fill="currentColor" viewBox="0 0 20 20">
+                    <path d="M13 6a3 3 0 11-6 0 3 3 0 016 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM14 15a4 4 0 00-8 0v3h8v-3z"/>
+                </svg>
+                <h2 class="section-title">Interview Confidence Builder</h2>
+            </div>
+            <div class="interview-item">
+                <div class="interview-challenge">Technical Questions</div>
+                <div class="interview-strategy">Practice explaining your project decisions</div>
+                <div class="interview-action">Action: Record yourself explaining why you chose specific data structures</div>
+            </div>
+            <div class="interview-item">
+                <div class="interview-challenge">Algorithm Confidence</div>
+                <div class="interview-strategy">Connect algorithms to your projects</div>
+                <div class="interview-action">Action: For each project, identify 2-3 algorithms you used</div>
+            </div>
+            <div class="interview-item">
+                <div class="interview-challenge">Stack Justification</div>
+                <div class="interview-strategy">Develop decision frameworks</div>
+                <div class="interview-action">Action: Create "Why I chose X over Y" explanations for your tools</div>
+            </div>
+        </div>
+
+        <!-- Quick Tips -->
+        <div class="tips-section">
+            <div class="tips-header">
+                <svg class="tips-icon" fill="currentColor" viewBox="0 0 20 20">
+                    <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/>
+                </svg>
+                <h3 class="tips-title">Remember Your Strengths</h3>
+            </div>
+            <ul class="tips-list">
+                <li>• Your AI usage pattern is industry-aligned and healthy</li>
+                <li>• Cyclical learning leads to deeper understanding than cramming</li>
+                <li>• Your aesthetic-logic bridge is a rare and valuable skill</li>
+                <li>• Context-dependent learning creates more authentic expertise</li>
+            </ul>
+        </div>
+    </div>
+
+    <script>
+        // Framework data
+        const frameworks = {
+            'context-first': {
+                title: 'Context-First Learning',
+                steps: [
+                    { id: 'passion', text: 'Pick a passion project (Spotify, Pokemon, anime data)', icon: '🎯' },
+                    { id: 'build', text: 'Build first, research as needed', icon: '🛠️' },
+                    { id: 'extract', text: 'Extract the CS concepts you actually used', icon: '💡' },
+                    { id: 'practice', text: 'Practice similar patterns in different contexts', icon: '🔄' },
+                    { id: 'connect', text: 'Connect to interview/technical knowledge', icon: '🔗' }
+                ]
+            },
+            'spiral-mastery': {
+                title: 'Spiral Mastery Method',
+                steps: [
+                    { id: 'intro', text: 'Touch concept lightly (15-20 min overview)', icon: '👋' },
+                    { id: 'break', text: 'Take a break (days/weeks) - let it percolate', icon: '☕' },
+                    { id: 'return', text: 'Return with deeper dive when naturally curious', icon: '🔍' },
+                    { id: 'apply', text: 'Apply to a real project or problem', icon: '⚡' },
+                    { id: 'cement', text: 'Cement understanding through teaching/explaining', icon: '🏗️' }
+                ]
+            },
+            'aesthetic-logic': {
+                title: 'Aesthetic-Logic Bridge',
+                steps: [
+                    { id: 'visual', text: 'Start with the UI/visual component you want', icon: '🎨' },
+                    { id: 'data', text: 'Work backwards to the data/logic needed', icon: '📊' },
+                    { id: 'implement', text: 'Implement the backend/algorithm', icon: '⚙️' },
+                    { id: 'polish', text: 'Polish the aesthetic and user experience', icon: '✨' },
+                    { id: 'showcase', text: 'Document the technical decisions beautifully', icon: '📝' }
+                ]
+            }
+        };
+
+        const weeklyRhythm = {
+            planning: [
+                'Pick your passion project for the week',
+                'Set one specific learning goal',
+                'Gather inspiration and resources'
+            ],
+            building: [
+                'Focus on building, not perfecting',
+                'Use AI for boilerplate/debugging (guilt-free!)',
+                'Document interesting problems you encounter'
+            ],
+            extracting: [
+                'What CS concepts did you actually use?',
+                'Find 2-3 related LeetCode problems',
+                'Practice the pattern in isolation'
+            ],
+            applying: [
+                'Apply the pattern to a different context',
+                'Explain your technical decisions out loud',
+                'Connect to potential interview questions'
+            ],
+            reflecting: [
+                'What did you learn about yourself?',
+                'What patterns are becoming clearer?',
+                'Plan next week\'s focus'
+            ]
+        };
+
+        // State
+        let activeFramework = 'context-first';
+        let currentWeek = 'planning';
+        let checkedItems = {};
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', function() {
+            updateFrameworkSteps();
+            updateWeekActivities();
+
+            // Framework selection
+            document.querySelectorAll('.framework-card').forEach(card => {
+                card.addEventListener('click', function() {
+                    const framework = this.dataset.framework;
+                    setActiveFramework(framework);
+                });
+            });
+
+            // Week tabs
+            document.querySelectorAll('.week-tab').forEach(tab => {
+                tab.addEventListener('click', function() {
+                    const week = this.dataset.week;
+                    setCurrentWeek(week);
+                });
+            });
+        });
+
+        function setActiveFramework(framework) {
+            activeFramework = framework;
+            
+            // Update card styles
+            document.querySelectorAll('.framework-card').forEach(card => {
+                if (card.dataset.framework === framework) {
+                    card.classList.remove('inactive');
+                    card.classList.add('active');
+                } else {
+                    card.classList.remove('active');
+                    card.classList.add('inactive');
+                }
+            });
+
+            // Update title
+            document.getElementById('active-framework-title').textContent = frameworks[framework].title;
+            
+            // Update steps
+            updateFrameworkSteps();
+        }
+
+        function setCurrentWeek(week) {
+            currentWeek = week;
+            
+            // Update tab styles
+            document.querySelectorAll('.week-tab').forEach(tab => {
+                if (tab.dataset.week === week) {
+                    tab.classList.remove('inactive');
+                    tab.classList.add('active');
+                } else {
+                    tab.classList.remove('active');
+                    tab.classList.add('inactive');
+                }
+            });
+
+            updateWeekActivities();
+        }
+
+        function updateFrameworkSteps() {
+            const stepsContainer = document.getElementById('framework-steps');
+            const steps = frameworks[activeFramework].steps;
+            
+            stepsContainer.innerHTML = steps.map(step => `
+                <div class="step">
+                    <span class="step-icon">${step.icon}</span>
+                    <div class="step-text">${step.text}</div>
+                    <input type="checkbox" class="step-checkbox" 
+                           ${checkedItems[step.id] ? 'checked' : ''} 
+                           onchange="toggleCheck('${step.id}')">
+                </div>
+            `).join('');
+        }
+
+        function updateWeekActivities() {
+            const activitiesContainer = document.getElementById('week-activities');
+            const activities = weeklyRhythm[currentWeek];
+            
+            activitiesContainer.innerHTML = activities.map(activity => `
+                <div class="activity">
+                    <svg class="activity-arrow" fill="currentColor" viewBox="0 0 20 20">
+                        <path d="M10.293 3.293a1 1 0 011.414 0l6 6a1 1 0 010 1.414l-6 6a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-4.293-4.293a1 1 0 010-1.414z"/>
+                    </svg>
+                    <span>${activity}</span>
+                </div>
+            `).join('');
+        }
+
+        function toggleCheck(id) {
+            checkedItems[id] = !checkedItems[id];
+        }
+    </script>
+</body>
+</html>
