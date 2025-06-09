@@ -564,12 +564,27 @@
     </div>
 
     <script>
-        const socket = io("http://" + document.domain + ":" + location.port);
+        // Auto-detect protocol and connect to SocketIO
+        const socket = io();
         let username = '';
         let roomCode = '';
         let isOwner = false;
         let playersData = [];
         let currentBid = 0;
+
+        // Add connection event handlers for debugging
+        socket.on('connect', function() {
+            console.log('✅ Connected to server');
+        });
+
+        socket.on('disconnect', function() {
+            console.log('❌ Disconnected from server');
+        });
+
+        socket.on('connect_error', function(error) {
+            console.error('❌ Connection error:', error);
+            alert('Connection error. Please refresh the page and try again.');
+        });
         let roomSettings = {
             max_players: 8,
             squad_size: 11,
@@ -967,9 +982,21 @@
         }
 
         createRoomBtn.addEventListener('click', () => {
+            console.log('🎯 Create Room button clicked');
+
+            // Check if socket is connected
+            if (!socket.connected) {
+                alert('Not connected to server. Please refresh the page and try again.');
+                console.error('❌ Socket not connected');
+                return;
+            }
+
             username = createUsernameInput.value.trim();
             const teamName = createTeamNameInput.value.trim();
             const file = playerCsvInput.files[0];
+
+            console.log('📝 Form data:', { username, teamName, file: file ? file.name : 'No file' });
+
             if (!username) {
                 alert('Please enter your name.');
                 return;
@@ -979,21 +1006,47 @@
                 return;
             }
 
+            // Disable button to prevent double clicks
+            createRoomBtn.disabled = true;
+            createRoomBtn.textContent = 'Creating Room...';
+
             const reader = new FileReader();
             reader.onload = function(event) {
-                const csvData = event.target.result;
-                playersData = parseCSV(csvData);
-                if (playersData.length === 0) {
-                    alert('Could not parse any players from the CSV. Please check the format.');
-                    return;
+                try {
+                    console.log('📄 Reading CSV file...');
+                    const csvData = event.target.result;
+                    playersData = parseCSV(csvData);
+                    console.log('✅ Parsed players:', playersData.length);
+
+                    if (playersData.length === 0) {
+                        alert('Could not parse any players from the CSV. Please check the format.');
+                        createRoomBtn.disabled = false;
+                        createRoomBtn.textContent = 'Create Auction Room';
+                        return;
+                    }
+
+                    isOwner = true;
+                    console.log('🚀 Emitting create_room event...');
+                    socket.emit('create_room', {
+                        username: username,
+                        team_name: teamName || username, // Use team name if provided, else username
+                        players: playersData
+                    });
+                } catch (error) {
+                    console.error('❌ Error processing CSV:', error);
+                    alert('Error processing CSV file. Please check the format and try again.');
+                    createRoomBtn.disabled = false;
+                    createRoomBtn.textContent = 'Create Auction Room';
                 }
-                isOwner = true;
-                socket.emit('create_room', {
-                    username: username,
-                    team_name: teamName || username, // Use team name if provided, else username
-                    players: playersData
-                });
             };
+
+            reader.onerror = function() {
+                console.error('❌ Error reading file');
+                alert('Error reading file. Please try again.');
+                createRoomBtn.disabled = false;
+                createRoomBtn.textContent = 'Create Auction Room';
+            };
+
             reader.readAsText(file);
         });
 
@@ -1056,6 +1109,12 @@
 
         // Socket.IO Event Handlers
         socket.on('room_created', (data) => {
+            console.log('✅ Room created successfully:', data);
+
+            // Re-enable the create room button
+            createRoomBtn.disabled = false;
+            createRoomBtn.textContent = 'Create Auction Room';
+
             roomCode = data.room_code;
             showScreen(lobbyScreen);
             roomCodeDisplay.textContent = roomCode;
@@ -1072,6 +1131,16 @@
                     auctionOrderSelect.value = data.room_settings.auction_order;
                 }
             }
+        });
+
+        // Add error handling for room creation
+        socket.on('error', (data) => {
+            console.error('❌ Server error:', data);
+            alert('Error: ' + (data.message || 'Something went wrong. Please try again.'));
+
+            // Re-enable the create room button
+            createRoomBtn.disabled = false;
+            createRoomBtn.textContent = 'Create Auction Room';
         });
 
         socket.on('room_joined', (data) => {
