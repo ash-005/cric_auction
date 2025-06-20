@@ -131,8 +131,8 @@ Ravindra Jadeja,All-rounder,India,88
 ## 🌐 Live Demo
 
 Once deployed on Render, your application will be available at:
-`https://your-app-name.onrender.com`
-
+[`https://your-app-name.onrender.com`
+](https://cric-auction.onrender.com/)
 ## 🛠️ Local Development
 
 ```bash
