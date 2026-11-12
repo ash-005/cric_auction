@@ -35,17 +35,22 @@ from flask_socketio import SocketIO, join_room, leave_room
 
 def _detect_async_mode():
     """gevent when running under gunicorn's gevent worker (production: thousands
-    of connections in one process); plain threads otherwise (python app.py)."""
-    forced = os.environ.get('SOCKETIO_ASYNC_MODE')
-    if forced:
-        return forced
+    of connections in one process); plain threads otherwise (python app.py).
+
+    The mode must match the server. Threading mode inside the gevent worker
+    breaks WebSockets and stalls requests, so a SOCKETIO_ASYNC_MODE setting
+    that contradicts the server is ignored (with a warning) rather than obeyed."""
     try:
         from gevent import monkey
-        if monkey.is_module_patched('socket'):
-            return 'gevent'
+        patched = monkey.is_module_patched('socket')
     except ImportError:
-        pass
-    return 'threading'
+        patched = False
+    detected = 'gevent' if patched else 'threading'
+    forced = (os.environ.get('SOCKETIO_ASYNC_MODE') or '').strip().lower()
+    if forced and forced != detected:
+        logging.getLogger('auction').warning(
+            'Ignoring SOCKETIO_ASYNC_MODE=%s: this server is running %s. Remove that setting.', forced, detected)
+    return detected
 
 
 ASYNC_MODE = _detect_async_mode()
