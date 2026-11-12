@@ -60,3 +60,5 @@ sample_*.csv
 # Temporary files
 *.tmp
 *.temp
+
+.pytest_cache/

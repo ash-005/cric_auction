@@ -1,1562 +1,1048 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Cricket Auction Simulator</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.5/socket.io.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-    <script>
-        tailwind.config = {
-            theme: {
-                extend: {
-                    fontFamily: {
-                        'inter': ['Inter', 'sans-serif'],
-                    },
-                    colors: {
-                        'primary': {
-                            50: '#f0f9ff',
-                            500: '#3b82f6',
-                            600: '#2563eb',
-                            700: '#1d4ed8',
-                            800: '#1e40af',
-                            900: '#1e3a8a',
-                        },
-                        'dark': {
-                            50: '#f8fafc',
-                            100: '#f1f5f9',
-                            200: '#e2e8f0',
-                            300: '#cbd5e1',
-                            400: '#94a3b8',
-                            500: '#64748b',
-                            600: '#475569',
-                            700: '#334155',
-                            800: '#1e293b',
-                            850: '#172033',
-                            900: '#0f172a',
-                            950: '#020617',
-                        }
-                    }
-                }
-            }
-        }
-    </script>
-    <style>
-        body {
-            font-family: 'Inter', sans-serif;
-            background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
-        }
-        .glass-effect {
-            background: rgba(30, 41, 59, 0.7);
-            backdrop-filter: blur(20px);
-            border: 1px solid rgba(148, 163, 184, 0.1);
-        }
-        .bouncing-loader {
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            gap: 0.5rem;
-        }
-        .bouncing-loader > div {
-            width: 0.75rem;
-            height: 0.75rem;
-            background: linear-gradient(45deg, #3b82f6, #1d4ed8);
-            border-radius: 50%;
-            animation: bouncing-loader 1.2s infinite ease-in-out;
-        }
-        .bouncing-loader > div:nth-child(2) {
-            animation-delay: 0.2s;
-        }
-        .bouncing-loader > div:nth-child(3) {
-            animation-delay: 0.4s;
-        }
-        @keyframes bouncing-loader {
-            0%, 80%, 100% {
-                transform: scale(0.8);
-                opacity: 0.5;
-            }
-            40% {
-                transform: scale(1.2);
-                opacity: 1;
-            }
-        }
-        .gradient-border {
-            background: linear-gradient(45deg, #3b82f6, #1d4ed8, #7c3aed);
-            background-size: 300% 300%;
-            animation: gradient-shift 3s ease infinite;
-        }
-        @keyframes gradient-shift {
-            0% { background-position: 0% 50%; }
-            50% { background-position: 100% 50%; }
-            100% { background-position: 0% 50%; }
-        }
-        .card-hover {
-            transition: all 0.3s ease;
-        }
-        .card-hover:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.3), 0 10px 10px -5px rgba(0, 0, 0, 0.1);
-        }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="default-pool" content="{{ default_pool }}">
+<title>Auction Room</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700;9..144,900&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.5/socket.io.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+{% raw %}
+<style>
+:root {
+    --paper: #f2ede2;
+    --paper-2: #e8e1d1;
+    --sheet: #f8f5ee;
+    --ink: #1c1b18;
+    --ink-2: #57534a;
+    --ink-3: #8b8578;
+    --rule: #cfc6b1;
+    --red: #b3261e;
+    --green: #2e5e3e;
+    --amber: #9a6f17;
+    --blue: #2f4b7c;
+    --serif: 'Fraunces', Georgia, 'Times New Roman', serif;
+    --sans: 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+    --mono: 'IBM Plex Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace;
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body { margin: 0; background: var(--paper); color: var(--ink); font: 15px/1.5 var(--sans); }
+[hidden] { display: none !important; }
+button, input, select { font: inherit; color: inherit; }
+.wrap { max-width: 1240px; margin: 0 auto; padding: 0 20px; }
+.mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+.muted { color: var(--ink-2); }
+.faint { color: var(--ink-3); }
+.red { color: var(--red); }
+.green { color: var(--green); }
+.caps { font-size: 11px; font-weight: 600; letter-spacing: .12em; text-transform: uppercase; color: var(--ink-2); }
+.caps.red { color: var(--red); } .caps.green { color: var(--green); } .caps.faint { color: var(--ink-3); }
+
+/* ---------- top bar ---------- */
+.top { position: sticky; top: 0; z-index: 20; background: var(--paper); border-bottom: 1px solid var(--ink); }
+.top-row { display: flex; align-items: center; gap: 16px; height: 56px; }
+.mark { display: flex; align-items: center; gap: 10px; text-decoration: none; color: inherit; font-family: var(--serif); font-weight: 900; font-size: 20px; letter-spacing: -.01em; }
+.mark svg { width: 22px; height: 22px; }
+.code-btn { font-family: var(--mono); font-size: 13px; background: none; border: 1px solid var(--ink); padding: 3px 9px; cursor: pointer; letter-spacing: .08em; }
+.code-btn:hover { background: var(--ink); color: var(--paper); }
+.top-right { margin-left: auto; display: flex; align-items: center; gap: 16px; font-size: 13px; }
+.conn { display: inline-flex; align-items: center; gap: 6px; color: var(--ink-2); }
+.conn i { width: 7px; height: 7px; border-radius: 50%; background: var(--ink-3); }
+.conn.on i { background: var(--green); }
+.conn.off i { background: var(--red); animation: blink 1s infinite; }
+@keyframes blink { 50% { opacity: .2; } }
+.linkbtn { background: none; border: 0; padding: 0; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; color: var(--ink-2); }
+.linkbtn:hover { color: var(--ink); }
+.tabs { display: flex; overflow-x: auto; scrollbar-width: none; }
+.tabs::-webkit-scrollbar { display: none; }
+.tab { background: none; border: 0; padding: 10px 14px 9px; cursor: pointer; font-size: 14px; font-weight: 500; color: var(--ink-2); border-bottom: 3px solid transparent; white-space: nowrap; }
+.tab:first-child { padding-left: 0; }
+.tab:hover { color: var(--ink); }
+.tab.on { color: var(--ink); border-bottom-color: var(--red); }
+.tab .n { font-family: var(--mono); font-size: 12px; color: var(--ink-3); margin-left: 4px; }
+
+/* ---------- generic ---------- */
+main { padding: 28px 0 140px; }
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; border: 1px solid var(--ink); background: var(--ink); color: var(--paper); padding: 10px 18px; font-weight: 600; font-size: 14px; cursor: pointer; border-radius: 0; transition: background .12s, color .12s; }
+.btn:hover { background: var(--red); border-color: var(--red); }
+.btn:active { transform: translateY(1px); }
+.btn:disabled { opacity: .35; cursor: not-allowed; background: var(--ink); border-color: var(--ink); }
+.btn.ghost { background: transparent; color: var(--ink); }
+.btn.ghost:hover { background: var(--ink); color: var(--paper); }
+.btn.ghost:disabled { background: transparent; color: var(--ink); }
+.btn.danger { background: transparent; color: var(--red); border-color: var(--red); }
+.btn.danger:hover { background: var(--red); color: var(--paper); }
+.btn.sm { padding: 6px 12px; font-size: 13px; }
+.btn.wide { width: 100%; padding: 14px; font-size: 15px; }
+.field { display: block; margin-bottom: 16px; }
+.field > span { display: block; margin-bottom: 6px; }
+.input { width: 100%; background: var(--sheet); border: 1px solid var(--ink); border-radius: 0; padding: 11px 12px; font-size: 15px; outline: none; }
+.input:focus { box-shadow: 0 0 0 3px rgba(179,38,30,.18); border-color: var(--red); }
+select.input { appearance: none; -webkit-appearance: none; background-image: linear-gradient(45deg, transparent 50%, var(--ink) 50%), linear-gradient(135deg, var(--ink) 50%, transparent 50%); background-position: calc(100% - 18px) 52%, calc(100% - 13px) 52%; background-size: 5px 5px; background-repeat: no-repeat; padding-right: 32px; }
+.h-section { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; border-bottom: 1px solid var(--ink); padding-bottom: 8px; margin: 0 0 12px; }
+.h-section h2 { font-family: var(--serif); font-size: 22px; font-weight: 700; margin: 0; letter-spacing: -.01em; }
+.h-section .aside { margin-left: auto; font-size: 13px; color: var(--ink-2); text-align: right; white-space: nowrap; }
+.role { display: inline-block; font-family: var(--mono); font-size: 11px; font-weight: 600; padding: 0 5px; border: 1px solid currentColor; letter-spacing: .04em; line-height: 17px; }
+.role.BAT { color: var(--blue); } .role.BOWL { color: var(--red); } .role.AR { color: var(--green); } .role.WK { color: var(--amber); }
+table.t { width: 100%; border-collapse: collapse; font-size: 14px; }
+table.t th { text-align: left; font-size: 11px; font-weight: 600; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-2); padding: 6px 8px; border-bottom: 1px solid var(--ink); }
+table.t td { padding: 8px; border-bottom: 1px solid var(--rule); vertical-align: middle; }
+table.t th:first-child, table.t td:first-child { padding-left: 2px; }
+table.t tr:last-child td { border-bottom: 0; }
+table.t .num { text-align: right; font-family: var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+table.t tr.me td { font-weight: 600; }
+table.t tr.lead td { background: #f3e3cf; }
+table.t tr.away td { color: var(--ink-3); }
+.empty { padding: 26px 8px; text-align: center; color: var(--ink-3); font-size: 14px; }
+.hint { font-size: 12px; color: var(--ink-3); margin: 8px 0 0; }
+.toasts { position: fixed; z-index: 50; left: 20px; bottom: 96px; display: flex; flex-direction: column; gap: 8px; width: min(380px, calc(100vw - 40px)); pointer-events: none; }
+.toast { background: var(--ink); color: var(--paper); padding: 10px 14px; font-size: 14px; border-left: 4px solid var(--ink-3); animation: rise .18s ease-out; box-shadow: 0 6px 20px rgba(0,0,0,.18); }
+.toast.error { border-left-color: #e0493e; }
+.toast.success { border-left-color: #6fae7f; }
+.toast.warn { border-left-color: #d8a63a; }
+@keyframes rise { from { transform: translateY(6px); opacity: 0; } to { transform: none; opacity: 1; } }
+
+/* ---------- setup ---------- */
+.setup { display: grid; grid-template-columns: 1.15fr 1fr; gap: 64px; align-items: start; padding-top: 20px; }
+.hero h1 { font-family: var(--serif); font-weight: 900; font-size: clamp(44px, 7vw, 84px); line-height: .95; letter-spacing: -.03em; margin: 0 0 20px; }
+.hero h1 em { font-style: italic; font-weight: 500; color: var(--red); }
+.hero p { font-size: 17px; max-width: 30em; color: var(--ink-2); margin: 0 0 28px; }
+.hero ol { list-style: none; counter-reset: s; padding: 0; margin: 0; border-top: 1px solid var(--ink); }
+.hero li { counter-increment: s; display: flex; gap: 14px; padding: 11px 0; border-bottom: 1px solid var(--rule); font-size: 14px; }
+.hero li::before { content: counter(s, decimal-leading-zero); font-family: var(--mono); color: var(--red); font-weight: 600; }
+.seg { display: grid; grid-template-columns: 1fr 1fr; border: 1px solid var(--ink); margin-bottom: 22px; }
+.seg button { background: none; border: 0; padding: 10px; cursor: pointer; font-weight: 600; }
+.seg button.on { background: var(--ink); color: var(--paper); }
+.choice { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.choice label { display: block; border: 1px solid var(--rule); padding: 10px 12px; cursor: pointer; background: var(--sheet); font-size: 14px; font-weight: 500; }
+.choice label:has(input:checked) { border-color: var(--ink); box-shadow: inset 0 0 0 1px var(--ink); }
+.choice input { accent-color: var(--red); margin: 0 6px 0 0; }
+.choice small { display: block; color: var(--ink-3); margin-left: 22px; font-weight: 400; }
+.resume { border: 1px dashed var(--ink); padding: 12px 14px; margin-bottom: 18px; display: flex; align-items: center; gap: 12px; font-size: 14px; }
+
+/* ---------- lobby ---------- */
+.lobby { display: grid; grid-template-columns: 1.4fr 1fr; gap: 48px; }
+.code-big { font-family: var(--mono); font-size: clamp(44px, 8vw, 76px); font-weight: 600; letter-spacing: .14em; line-height: 1; margin: 6px 0 16px; }
+.register { list-style: none; margin: 0; padding: 0; }
+.register li { display: flex; align-items: baseline; gap: 14px; padding: 12px 0; border-bottom: 1px solid var(--rule); }
+.register .no { font-family: var(--mono); color: var(--ink-3); font-size: 13px; width: 24px; flex: none; }
+.register .tn { font-family: var(--serif); font-size: 21px; font-weight: 700; }
+.register .tag { font-size: 12px; color: var(--ink-2); }
+.register .st { margin-left: auto; font-size: 12px; }
+.kv { display: flex; justify-content: space-between; padding: 7px 0; border-bottom: 1px solid var(--rule); font-size: 14px; }
+.kv b { font-weight: 600; }
+.bar { height: 6px; background: var(--paper-2); position: relative; }
+.bar > i { position: absolute; inset: 0 auto 0 0; background: var(--ink); }
+
+/* ---------- floor ---------- */
+.floor { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr); gap: 36px; align-items: start; }
+.lot { border: 1px solid var(--ink); background: var(--sheet); }
+.lot-head { display: flex; gap: 10px; align-items: center; padding: 9px 20px; border-bottom: 1px solid var(--ink); }
+.lot-body { padding: 22px 20px 20px; }
+.lot-name { font-family: var(--serif); font-weight: 900; font-size: clamp(34px, 5vw, 56px); line-height: 1; letter-spacing: -.025em; margin: 0 0 14px; overflow-wrap: anywhere; }
+.lot-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 18px; font-size: 14px; color: var(--ink-2); }
+.lot-meta b { color: var(--ink); font-weight: 600; }
+.board { display: grid; grid-template-columns: 1.15fr 1fr; border-top: 1px solid var(--ink); }
+.board > div { padding: 16px 20px; min-width: 0; }
+.board > div + div { border-left: 1px solid var(--ink); }
+.board .big { font-family: var(--mono); font-weight: 600; font-size: clamp(36px, 5.2vw, 56px); line-height: 1.05; letter-spacing: -.02em; }
+.board .who { font-family: var(--serif); font-weight: 700; font-size: 25px; line-height: 1.15; overflow-wrap: anywhere; margin-top: 4px; }
+.board.mine { background: #e5ecdc; }
+.clock { border-top: 1px solid var(--ink); padding: 12px 20px; display: flex; align-items: center; gap: 14px; }
+.clock .track { flex: 1; height: 10px; background: var(--paper-2); position: relative; overflow: hidden; }
+.clock .fill { position: absolute; inset: 0 auto 0 0; background: var(--ink); width: 100%; }
+.clock.hot .fill { background: var(--red); }
+.clock .secs { font-family: var(--mono); font-weight: 600; font-size: 22px; width: 3ch; text-align: right; }
+.clock.hot .secs { color: var(--red); }
+.history { border-top: 1px solid var(--ink); padding: 10px 20px 14px; }
+.history ol { list-style: none; margin: 6px 0 0; padding: 0; font-size: 14px; }
+.history li { display: flex; gap: 12px; padding: 2px 0; color: var(--ink-2); }
+.history li:first-child { color: var(--ink); font-weight: 600; }
+.history .amt { font-family: var(--mono); width: 7.5em; flex: none; }
+.stamp-wrap { padding: 46px 20px 42px; text-align: center; }
+.stamp { display: inline-block; font-family: var(--serif); font-weight: 900; font-size: clamp(56px, 10vw, 104px); letter-spacing: .02em; line-height: 1; padding: 10px 28px 6px; border: 6px double currentColor; transform: rotate(-5deg); animation: thump .35s cubic-bezier(.2,1.4,.4,1) both; }
+.stamp.sold { color: var(--red); }
+.stamp.unsold { color: var(--ink-3); }
+@keyframes thump { from { transform: scale(1.5) rotate(-5deg); opacity: 0; } to { transform: rotate(-5deg); opacity: 1; } }
+.stamp-sub { margin-top: 28px; font-size: 18px; }
+.stamp-sub .mono { font-size: 30px; font-weight: 600; display: block; margin-bottom: 2px; }
+.interval { padding: 44px 20px; text-align: center; }
+.interval h3 { font-family: var(--serif); font-size: 46px; font-weight: 900; margin: 6px 0 6px; letter-spacing: -.02em; }
+.gavel { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 16px; padding-top: 14px; border-top: 1px dashed var(--ink); }
+.gavel .caps { margin-right: 4px; }
+.gavel .push { margin-left: auto; }
+.flash { animation: flash .6s ease-out; }
+@keyframes flash { from { background: #f0d4ad; } }
+
+/* ---------- bid bar ---------- */
+.bidbar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 30; background: var(--ink); color: var(--paper); }
+.bidbar .wrap { display: flex; align-items: center; gap: 18px; min-height: 76px; padding-top: 10px; padding-bottom: 10px; }
+.bb-info { min-width: 0; flex: 1; }
+.bb-name { font-family: var(--serif); font-size: 19px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bb-line { font-size: 13px; color: #c9c2b2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bb-line .mono { color: var(--paper); font-weight: 600; }
+.bb-note { font-size: 12px; color: #e3b45a; margin-top: 1px; }
+.bb-secs { font-family: var(--mono); font-size: 30px; font-weight: 600; width: 2.4ch; text-align: right; }
+.bb-secs.hot { color: #ff6b5e; }
+.bb-btns { display: flex; gap: 8px; }
+.bidbtn { background: var(--paper); color: var(--ink); border: 0; padding: 8px 16px; min-width: 132px; cursor: pointer; text-align: left; }
+.bidbtn:hover { background: #fff; }
+.bidbtn:active { transform: translateY(1px); }
+.bidbtn b { display: block; font-family: var(--mono); font-size: 19px; font-weight: 600; line-height: 1.2; }
+.bidbtn small { font-size: 11px; color: var(--ink-2); letter-spacing: .03em; }
+.bidbtn.primary { background: var(--red); color: #fff; }
+.bidbtn.primary small { color: #f6d5d0; }
+.bidbtn.primary:hover { background: #c93228; }
+.bidbtn:disabled { opacity: .3; cursor: not-allowed; }
+
+/* ---------- squad / teams / players / log ---------- */
+.figures { display: grid; grid-template-columns: repeat(4, 1fr); border-top: 1px solid var(--ink); border-bottom: 1px solid var(--ink); margin-bottom: 22px; }
+.figures > div { padding: 12px 14px; min-width: 0; }
+.figures > div:first-child { padding-left: 2px; }
+.figures > div + div { border-left: 1px solid var(--rule); }
+.figures .v { font-family: var(--mono); font-size: 24px; font-weight: 600; line-height: 1.25; }
+.rolebar { display: flex; height: 24px; border: 1px solid var(--ink); margin: 4px 0 8px; background: var(--paper-2); }
+.rolebar > i { display: flex; align-items: center; justify-content: center; font-style: normal; font-family: var(--mono); font-size: 11px; color: #fff; font-weight: 600; overflow: hidden; }
+.legend { display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 13px; color: var(--ink-2); margin-bottom: 18px; }
+.legend span::before { content: ''; display: inline-block; width: 9px; height: 9px; margin-right: 6px; background: var(--c); }
+#my-squad, [data-pane-body="log"] { max-width: 860px; }
+.cols-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 36px; }
+details.team { border-top: 1px solid var(--ink); }
+details.team:last-of-type { border-bottom: 1px solid var(--ink); }
+details.team > summary { list-style: none; cursor: pointer; display: grid; grid-template-columns: 1fr auto auto auto; gap: 20px; align-items: baseline; padding: 12px 2px; }
+details.team > summary::-webkit-details-marker { display: none; }
+details.team > summary .tn { font-family: var(--serif); font-size: 20px; font-weight: 700; }
+details.team > summary .tn::before { content: '+'; font-family: var(--mono); display: inline-block; width: 1.4em; color: var(--ink-3); font-weight: 400; }
+details.team[open] > summary .tn::before { content: '\2212'; }
+details.team > div { padding: 0 2px 16px; }
+.batches { list-style: none; margin: 0 0 28px; padding: 0; }
+.batches li { display: grid; grid-template-columns: 1fr 7em; gap: 6px 16px; padding: 10px 0; border-bottom: 1px solid var(--rule); align-items: center; }
+.batches li .bar { grid-column: 1 / -1; }
+.batches li.current .bn { font-weight: 700; }
+.batches li.current .bn::after { content: '  \2190 now'; color: var(--red); font-size: 12px; font-weight: 600; }
+.batches li.done { color: var(--ink-3); }
+.batches li.done .bar > i { background: var(--ink-3); }
+.log { list-style: none; margin: 0; padding: 0; font-size: 14px; }
+.log li { display: grid; grid-template-columns: 6em 1fr; gap: 12px; padding: 7px 0; border-bottom: 1px solid var(--rule); }
+.log time { font-family: var(--mono); font-size: 12px; color: var(--ink-3); padding-top: 2px; }
+.log .k-sold { font-weight: 600; }
+.log .k-unsold, .log .k-join, .log .k-leave, .log .k-info { color: var(--ink-2); }
+.log .k-batch, .log .k-start, .log .k-end { color: var(--red); font-weight: 600; }
+
+/* ---------- results ---------- */
+.res-head { display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-end; border-bottom: 3px double var(--ink); padding-bottom: 16px; margin-bottom: 24px; }
+.res-head h1 { font-family: var(--serif); font-weight: 900; font-size: clamp(40px, 6vw, 64px); line-height: 1; letter-spacing: -.03em; margin: 4px 0 0; }
+.res-head .actions { margin-left: auto; display: flex; gap: 8px; flex-wrap: wrap; }
+.charts { display: grid; grid-template-columns: 1fr 1fr; gap: 36px; margin-bottom: 36px; }
+.chart-box { height: 260px; position: relative; }
+.res-teams { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 36px; }
+
+@media (max-width: 920px) {
+    .setup, .lobby, .floor, .cols-2, .charts { grid-template-columns: 1fr; gap: 30px; }
+    .figures { grid-template-columns: repeat(2, 1fr); }
+    .figures > div:nth-child(3) { border-left: 0; padding-left: 2px; }
+    .figures > div:nth-child(n+3) { border-top: 1px solid var(--rule); }
+}
+@media (max-width: 640px) {
+    .wrap { padding: 0 14px; }
+    main { padding: 18px 0 170px; }
+    #hdr-team { display: none; }
+    .lot-head, .lot-body, .board > div, .clock, .history { padding-left: 14px; padding-right: 14px; }
+    .bidbar .wrap { flex-wrap: wrap; gap: 8px 12px; padding-top: 8px; padding-bottom: 10px; }
+    .bb-info { flex: 1 1 calc(100% - 60px); }
+    .bb-btns { width: 100%; }
+    .bidbtn { flex: 1; min-width: 0; }
+    .res-teams { grid-template-columns: 1fr; }
+    details.team > summary { grid-template-columns: 1fr auto; }
+    details.team > summary .hide-sm { display: none; }
+    .toasts { left: 14px; bottom: 150px; }
+}
+</style>
+{% endraw %}
 </head>
-<body class="bg-gradient-to-br from-dark-900 via-dark-800 to-dark-900 text-white min-h-screen font-inter">
+<body>
 
-    <!-- Main Container -->
-    <div class="min-h-screen flex items-center justify-center p-6 lg:p-12">
-        <div id="app" class="w-full max-w-7xl mx-auto">
-
-            <!-- Welcome/Setup Screen -->
-            <div id="setup-screen" class="glass-effect rounded-3xl shadow-2xl overflow-hidden">
-                <!-- Header -->
-                <div class="bg-gradient-to-r from-primary-600 to-primary-800 px-12 py-16 text-center">
-                    <div class="max-w-3xl mx-auto">
-                        <h1 class="text-6xl font-bold mb-6 text-white tracking-tight">🏏 Cricket Auction</h1>
-                        <p class="text-xl text-primary-100 leading-relaxed">Professional cricket auction simulator with real-time bidding and team management</p>
-                    </div>
-                </div>
-
-                <!-- Content -->
-                <div class="p-12">
-                    <div class="grid lg:grid-cols-2 gap-12 max-w-6xl mx-auto">
-                        <!-- Create Room Card -->
-                        <div class="glass-effect rounded-2xl p-10 card-hover border border-dark-600">
-                            <div class="text-center mb-8">
-                                <div class="w-16 h-16 bg-gradient-to-r from-primary-500 to-primary-700 rounded-2xl flex items-center justify-center mx-auto mb-6">
-                                    <span class="text-2xl">🎯</span>
-                                </div>
-                                <h2 class="text-3xl font-bold mb-4 text-white">Create New Auction</h2>
-                                <p class="text-dark-300 text-lg">Start a new auction room and invite others to join</p>
-                            </div>
-
-                            <div class="space-y-6">
-                                <div>
-                                    <label class="block text-sm font-semibold text-dark-200 mb-3">Your Name</label>
-                                    <input type="text" id="create-username" placeholder="Enter your name"
-                                           class="w-full bg-dark-800 border border-dark-600 rounded-xl px-6 py-4 text-white placeholder-dark-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all duration-200">
-                                </div>
-
-                                <div>
-                                    <label class="block text-sm font-semibold text-dark-200 mb-3">Team Name (Optional)</label>
-                                    <input type="text" id="create-team-name" placeholder="Enter your team name"
-                                           class="w-full bg-dark-800 border border-dark-600 rounded-xl px-6 py-4 text-white placeholder-dark-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all duration-200">
-                                </div>
-
-                                <div>
-                                    <label for="player-csv" class="block text-sm font-semibold text-dark-200 mb-3">Upload Players CSV</label>
-                                    <div class="relative">
-                                        <input type="file" id="player-csv" accept=".csv"
-                                               class="w-full bg-dark-800 border border-dark-600 rounded-xl px-6 py-4 text-white file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-primary-600 file:text-white hover:file:bg-primary-700 file:transition-colors file:duration-200">
-                                    </div>
-                                </div>
-
-                                <button id="create-room-btn"
-                                        class="w-full bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-700 hover:to-primary-800 text-white font-bold py-5 px-8 rounded-xl transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-xl">
-                                    Create Auction Room
-                                </button>
-                            </div>
-                        </div>
-
-                        <!-- Join Room Card -->
-                        <div class="glass-effect rounded-2xl p-10 card-hover border border-dark-600">
-                            <div class="text-center mb-8">
-                                <div class="w-16 h-16 bg-gradient-to-r from-green-500 to-green-700 rounded-2xl flex items-center justify-center mx-auto mb-6">
-                                    <span class="text-2xl">🚪</span>
-                                </div>
-                                <h2 class="text-3xl font-bold mb-4 text-white">Join Existing Auction</h2>
-                                <p class="text-dark-300 text-lg">Enter a room code to join an ongoing auction</p>
-                            </div>
-
-                            <div class="space-y-6">
-                                <div>
-                                    <label class="block text-sm font-semibold text-dark-200 mb-3">Your Name</label>
-                                    <input type="text" id="join-username" placeholder="Enter your name"
-                                           class="w-full bg-dark-800 border border-dark-600 rounded-xl px-6 py-4 text-white placeholder-dark-400 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all duration-200">
-                                </div>
-
-                                <div>
-                                    <label class="block text-sm font-semibold text-dark-200 mb-3">Team Name (Optional)</label>
-                                    <input type="text" id="team-name-input" placeholder="Enter team name"
-                                           class="w-full bg-dark-800 border border-dark-600 rounded-xl px-6 py-4 text-white placeholder-dark-400 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all duration-200">
-                                </div>
-
-                                <div>
-                                    <label class="block text-sm font-semibold text-dark-200 mb-3">Room Code</label>
-                                    <input type="text" id="room-code-input" placeholder="Enter 6-character room code"
-                                           class="w-full bg-dark-800 border border-dark-600 rounded-xl px-6 py-4 text-white placeholder-dark-400 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all duration-200 font-mono text-lg tracking-wider">
-                                </div>
-
-                                <button id="join-room-btn"
-                                        class="w-full bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white font-bold py-5 px-8 rounded-xl transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-xl">
-                                    Join Auction Room
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Lobby Screen -->
-            <div id="lobby-screen" class="hidden glass-effect rounded-3xl shadow-2xl overflow-hidden">
-                <!-- Header -->
-                <div class="bg-gradient-to-r from-primary-600 to-primary-800 px-12 py-12">
-                    <div class="text-center">
-                        <h2 class="text-4xl font-bold mb-4 text-white">Auction Lobby</h2>
-                        <div class="inline-flex items-center bg-white/20 rounded-2xl px-8 py-4 backdrop-blur-sm">
-                            <span class="text-primary-100 text-lg font-medium mr-4">Room Code:</span>
-                            <span id="room-code-display" class="text-white font-mono text-2xl font-bold tracking-wider"></span>
-                        </div>
-                        <p class="text-primary-100 mt-6 text-lg">Waiting for all players to join...</p>
-                    </div>
-                </div>
-
-                <div class="p-12">
-                    <!-- Room Settings (Owner Only) -->
-                    <div id="room-settings" class="hidden mb-12">
-                        <div class="glass-effect rounded-2xl p-8 border border-dark-600">
-                            <div class="flex items-center mb-8">
-                                <div class="w-12 h-12 bg-gradient-to-r from-yellow-500 to-orange-600 rounded-xl flex items-center justify-center mr-4">
-                                    <span class="text-xl">⚙️</span>
-                                </div>
-                                <h3 class="text-2xl font-bold text-white">Auction Settings</h3>
-                            </div>
-
-                            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
-                                <div>
-                                    <label class="block text-sm font-semibold text-dark-200 mb-3">Max Players</label>
-                                    <select id="max-players-select" class="w-full bg-dark-800 border border-dark-600 rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-primary-500">
-                                        <option value="2">2 Players</option>
-                                        <option value="3">3 Players</option>
-                                        <option value="4">4 Players</option>
-                                        <option value="5">5 Players</option>
-                                        <option value="6">6 Players</option>
-                                        <option value="7">7 Players</option>
-                                        <option value="8" selected>8 Players</option>
-                                        <option value="9">9 Players</option>
-                                    </select>
-                                </div>
-                                <div>
-                                    <label class="block text-sm font-semibold text-dark-200 mb-3">Squad Size</label>
-                                    <select id="squad-size-select" class="w-full bg-dark-800 border border-dark-600 rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-primary-500">
-                                        <option value="11" selected>11 Players</option>
-                                        <option value="15">15 Players</option>
-                                        <option value="18">18 Players</option>
-                                        <option value="20">20 Players</option>
-                                    </select>
-                                </div>
-                                <div>
-                                    <label class="block text-sm font-semibold text-dark-200 mb-3">Team Purse</label>
-                                    <select id="team-purse-select" class="w-full bg-dark-800 border border-dark-600 rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-primary-500">
-                                        <option value="90">₹90 Crores</option>
-                                        <option value="100" selected>₹100 Crores</option>
-                                        <option value="120">₹120 Crores</option>
-                                        <option value="150">₹150 Crores</option>
-                                    </select>
-                                </div>
-                                <div>
-                                    <label class="block text-sm font-semibold text-dark-200 mb-3">Auction Order</label>
-                                    <select id="auction-order-select" class="w-full bg-dark-800 border border-dark-600 rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-primary-500">
-                                        <option value="random" selected>Random Order</option>
-                                        <option value="alphabetical">Alphabetical</option>
-                                        <option value="skill_desc">Skill (High to Low)</option>
-                                        <option value="skill_asc">Skill (Low to High)</option>
-                                    </select>
-                                </div>
-                            </div>
-                            <div class="mt-8">
-                                <button id="update-settings-btn" class="bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white font-bold py-3 px-8 rounded-xl transition-all duration-300 transform hover:scale-105">
-                                    Update Settings
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Players List -->
-                    <div class="glass-effect rounded-2xl p-8 border border-dark-600 mb-12">
-                        <div class="flex items-center mb-8">
-                            <div class="w-12 h-12 bg-gradient-to-r from-green-500 to-emerald-600 rounded-xl flex items-center justify-center mr-4">
-                                <span class="text-xl">👥</span>
-                            </div>
-                            <h3 class="text-2xl font-bold text-white">Players in Lobby</h3>
-                        </div>
-                        <div id="player-list" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                            <!-- Player cards will be injected here -->
-                        </div>
-                    </div>
-
-                    <!-- Start Auction Button (Owner Only) -->
-                    <div id="owner-controls" class="hidden text-center">
-                        <button id="start-auction-btn" class="bg-gradient-to-r from-primary-600 to-primary-800 hover:from-primary-700 hover:to-primary-900 text-white font-bold py-6 px-12 rounded-2xl transition-all duration-300 transform hover:scale-105 shadow-2xl text-xl">
-                            🚀 Start Auction
-                        </button>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Auction Screen -->
-            <div id="auction-screen" class="hidden">
-                <!-- Owner Controls -->
-                <div id="auction-owner-controls" class="hidden mb-8">
-                    <div class="glass-effect rounded-2xl p-6 border border-dark-600">
-                        <div class="flex justify-center gap-6">
-                            <button id="skip-player-btn" class="bg-gradient-to-r from-orange-600 to-orange-700 hover:from-orange-700 hover:to-orange-800 text-white font-bold py-3 px-8 rounded-xl transition-all duration-300 transform hover:scale-105">
-                                ⏭️ Skip Player
-                            </button>
-                            <button id="end-auction-btn" class="bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white font-bold py-3 px-8 rounded-xl transition-all duration-300 transform hover:scale-105">
-                                🛑 End Auction
-                            </button>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="grid grid-cols-1 xl:grid-cols-12 gap-8">
-                    <!-- Left Panel: Sold Players & Auction Trends -->
-                    <div class="xl:col-span-3 space-y-6">
-                        <!-- Sold Players -->
-                        <div class="glass-effect rounded-2xl p-6 border border-dark-600 h-[350px]">
-                            <div class="flex items-center mb-6">
-                                <div class="w-10 h-10 bg-gradient-to-r from-green-500 to-emerald-600 rounded-xl flex items-center justify-center mr-3">
-                                    <span class="text-lg">✅</span>
-                                </div>
-                                <h3 class="text-xl font-bold text-white">Sold Players</h3>
-                            </div>
-                            <div id="sold-players-list" class="overflow-y-auto h-[250px] space-y-3">
-                                <!-- Sold players will be injected here -->
-                            </div>
-                        </div>
-
-                        <!-- Auction Trends Chart -->
-                        <div class="glass-effect rounded-2xl p-6 border border-dark-600 h-[350px]">
-                            <div class="flex items-center mb-6">
-                                <div class="w-10 h-10 bg-gradient-to-r from-purple-500 to-purple-700 rounded-xl flex items-center justify-center mr-3">
-                                    <span class="text-lg">📈</span>
-                                </div>
-                                <h3 class="text-xl font-bold text-white">Price Trends</h3>
-                            </div>
-                            <div class="h-[250px]">
-                                <canvas id="auction-trends-chart"></canvas>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Center Panel: Current Player & Bidding -->
-                    <div class="xl:col-span-6">
-                        <!-- Timer -->
-                        <div class="text-center mb-8">
-                            <div id="timer-display" class="inline-flex items-center justify-center w-32 h-32 bg-gradient-to-r from-red-500 to-red-700 rounded-full text-6xl font-bold text-white shadow-2xl">
-                                15
-                            </div>
-                        </div>
-
-                        <!-- Player Card -->
-                        <div id="current-player-card" class="glass-effect rounded-2xl p-8 border border-dark-600 mb-8">
-                            <div id="player-details" class="text-center">
-                                <h2 id="player-name" class="text-5xl font-bold mb-4 text-white">Player Name</h2>
-                                <div class="flex justify-center items-center gap-8 mb-6">
-                                    <div class="text-center">
-                                        <p class="text-sm font-semibold text-dark-300 mb-1">ROLE</p>
-                                        <p id="player-role" class="text-xl font-bold text-primary-400">Role</p>
-                                    </div>
-                                    <div class="text-center">
-                                        <p class="text-sm font-semibold text-dark-300 mb-1">COUNTRY</p>
-                                        <p id="player-nationality" class="text-xl font-bold text-primary-400">Nationality</p>
-                                    </div>
-                                    <div class="text-center">
-                                        <p class="text-sm font-semibold text-dark-300 mb-1">OVERALL</p>
-                                        <p id="player-overall" class="text-xl font-bold text-primary-400"><span></span></p>
-                                    </div>
-                                </div>
-                                <div class="bg-dark-800 rounded-xl p-4 inline-block">
-                                    <p class="text-sm font-semibold text-dark-300 mb-1">BASE PRICE</p>
-                                    <p class="text-3xl font-bold text-green-400" id="base-price">₹0 Cr</p>
-                                </div>
-                            </div>
-                            <div class="bouncing-loader hidden py-16">
-                                <div></div>
-                                <div></div>
-                                <div></div>
-                            </div>
-                        </div>
-
-                        <!-- Bidding Info -->
-                        <div id="bidding-info" class="glass-effect rounded-2xl p-6 border border-dark-600 mb-8">
-                            <div class="text-center">
-                                <div class="mb-4">
-                                    <p class="text-lg text-dark-300 mb-2">Current Bid</p>
-                                    <p class="text-4xl font-bold text-yellow-400" id="current-bid">₹0 Cr</p>
-                                </div>
-                                <div>
-                                    <p class="text-lg text-dark-300 mb-2">Current Bidder</p>
-                                    <p class="text-2xl font-bold text-primary-400" id="current-bidder">None</p>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Bidding Controls -->
-                        <div id="bidding-controls" class="flex justify-center gap-6">
-                            <button id="bid-half-cr-btn" class="bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white font-bold py-4 px-10 rounded-xl transition-all duration-300 transform hover:scale-105 shadow-lg text-xl">
-                                +₹0.5 Cr
-                            </button>
-                            <button id="bid-one-cr-btn" class="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-bold py-4 px-10 rounded-xl transition-all duration-300 transform hover:scale-105 shadow-lg text-xl">
-                                +₹1 Cr
-                            </button>
-                        </div>
-                    </div>
-
-                    <!-- Right Panel: Team Compositions & Visualizations -->
-                    <div class="xl:col-span-3 space-y-6">
-                        <!-- Team Compositions List -->
-                        <div class="glass-effect rounded-2xl p-6 border border-dark-600 h-[350px]">
-                            <div class="flex items-center mb-6">
-                                <div class="w-10 h-10 bg-gradient-to-r from-purple-500 to-purple-700 rounded-xl flex items-center justify-center mr-3">
-                                    <span class="text-lg">🏆</span>
-                                </div>
-                                <h3 class="text-xl font-bold text-white">Teams</h3>
-                            </div>
-                            <div id="team-compositions-list" class="overflow-y-auto h-[200px] space-y-4">
-                                <!-- Team compositions will be injected here -->
-                            </div>
-                            <div class="mt-4 flex gap-3">
-                                <button id="save-teams-btn" class="flex-1 bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white font-bold py-2 px-4 rounded-lg transition-all duration-300 text-sm">
-                                    JSON
-                                </button>
-                                <button id="save-teams-csv-btn" class="flex-1 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-bold py-2 px-4 rounded-lg transition-all duration-300 text-sm">
-                                    CSV
-                                </button>
-                            </div>
-                        </div>
-
-                        <!-- Team Composition Visualization -->
-                        <div class="glass-effect rounded-2xl p-6 border border-dark-600 h-[350px]">
-                            <div class="flex items-center mb-6">
-                                <div class="w-10 h-10 bg-gradient-to-r from-blue-500 to-blue-700 rounded-xl flex items-center justify-center mr-3">
-                                    <span class="text-lg">📊</span>
-                                </div>
-                                <h3 class="text-xl font-bold text-white">Role Distribution</h3>
-                            </div>
-                            <div class="h-[250px]">
-                                <canvas id="team-composition-chart"></canvas>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Results Screen -->
-            <div id="results-screen" class="hidden glass-effect rounded-3xl shadow-2xl overflow-hidden">
-                <!-- Header -->
-                <div class="bg-gradient-to-r from-green-600 to-emerald-800 px-12 py-16 text-center">
-                    <h2 class="text-6xl font-bold mb-6 text-white">🏆 Auction Complete!</h2>
-                    <p class="text-xl text-green-100">All teams have been finalized. Check out the results below.</p>
-                </div>
-
-                <div class="p-12">
-                    <!-- Auction Statistics -->
-                    <div id="auction-statistics" class="mb-12">
-                        <div class="text-center mb-8">
-                            <h3 class="text-3xl font-bold text-white mb-2">Auction Statistics</h3>
-                            <p class="text-dark-300 text-lg">Key highlights from the auction</p>
-                        </div>
-
-                        <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
-                            <div class="glass-effect rounded-2xl p-8 border border-dark-600 text-center card-hover">
-                                <div class="w-16 h-16 bg-gradient-to-r from-green-500 to-emerald-600 rounded-2xl flex items-center justify-center mx-auto mb-6">
-                                    <span class="text-2xl">💰</span>
-                                </div>
-                                <h4 class="text-lg font-semibold text-green-400 mb-4">Most Expensive Player</h4>
-                                <div id="most-expensive-player">
-                                    <p id="expensive-player-name" class="text-2xl font-bold text-white mb-2">-</p>
-                                    <p id="expensive-player-price" class="text-xl text-green-400 mb-2">-</p>
-                                    <p id="expensive-player-buyer" class="text-sm text-dark-300">-</p>
-                                </div>
-                            </div>
-
-                            <div class="glass-effect rounded-2xl p-8 border border-dark-600 text-center card-hover">
-                                <div class="w-16 h-16 bg-gradient-to-r from-blue-500 to-blue-700 rounded-2xl flex items-center justify-center mx-auto mb-6">
-                                    <span class="text-2xl">📊</span>
-                                </div>
-                                <h4 class="text-lg font-semibold text-blue-400 mb-4">Average Price</h4>
-                                <p id="average-price" class="text-3xl font-bold text-blue-400">-</p>
-                            </div>
-
-                            <div class="glass-effect rounded-2xl p-8 border border-dark-600 text-center card-hover">
-                                <div class="w-16 h-16 bg-gradient-to-r from-purple-500 to-purple-700 rounded-2xl flex items-center justify-center mx-auto mb-6">
-                                    <span class="text-2xl">👥</span>
-                                </div>
-                                <h4 class="text-lg font-semibold text-purple-400 mb-4">Players Sold</h4>
-                                <p id="total-players-sold" class="text-3xl font-bold text-purple-400">-</p>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Visualizations Section -->
-                    <div class="mb-12">
-                        <div class="text-center mb-8">
-                            <h3 class="text-3xl font-bold text-white mb-2">Auction Analytics</h3>
-                            <p class="text-dark-300 text-lg">Visual insights from the completed auction</p>
-                        </div>
-
-                        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-12">
-                            <!-- Spending Distribution Chart -->
-                            <div class="glass-effect rounded-2xl p-8 border border-dark-600">
-                                <div class="flex items-center mb-6">
-                                    <div class="w-12 h-12 bg-gradient-to-r from-green-500 to-emerald-600 rounded-xl flex items-center justify-center mr-4">
-                                        <span class="text-xl">💰</span>
-                                    </div>
-                                    <h4 class="text-xl font-bold text-white">Team Spending</h4>
-                                </div>
-                                <div class="h-80">
-                                    <canvas id="spending-chart"></canvas>
-                                </div>
-                            </div>
-
-                            <!-- Role Distribution Chart -->
-                            <div class="glass-effect rounded-2xl p-8 border border-dark-600">
-                                <div class="flex items-center mb-6">
-                                    <div class="w-12 h-12 bg-gradient-to-r from-blue-500 to-blue-700 rounded-xl flex items-center justify-center mr-4">
-                                        <span class="text-xl">👥</span>
-                                    </div>
-                                    <h4 class="text-xl font-bold text-white">Overall Role Distribution</h4>
-                                </div>
-                                <div class="h-80">
-                                    <canvas id="role-distribution-chart"></canvas>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Price Trends Over Time -->
-                        <div class="glass-effect rounded-2xl p-8 border border-dark-600 mb-12">
-                            <div class="flex items-center mb-6">
-                                <div class="w-12 h-12 bg-gradient-to-r from-purple-500 to-purple-700 rounded-xl flex items-center justify-center mr-4">
-                                    <span class="text-xl">📈</span>
-                                </div>
-                                <h4 class="text-xl font-bold text-white">Auction Price Trends</h4>
-                            </div>
-                            <div class="h-80">
-                                <canvas id="final-trends-chart"></canvas>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Teams Display -->
-                    <div class="mb-12">
-                        <div class="text-center mb-8">
-                            <h3 class="text-3xl font-bold text-white mb-2">Final Teams</h3>
-                            <p class="text-dark-300 text-lg">Complete squad compositions for all teams</p>
-                        </div>
-                        <div id="teams-display" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-8">
-                            <!-- Team cards will be generated here -->
-                        </div>
-                    </div>
-
-                    <!-- Export Button -->
-                    <div class="text-center">
-                        <button id="save-teams-excel-btn" class="bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white font-bold py-4 px-12 rounded-2xl transition-all duration-300 transform hover:scale-105 shadow-lg text-xl">
-                            📊 Export to Excel
-                        </button>
-                    </div>
-                </div>
-            </div>
-
+<header class="top">
+    <div class="wrap top-row">
+        <a class="mark" href="#" onclick="return false">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="11" fill="#b3261e"/><path d="M7 3.6c2.7 4.8 2.7 12 0 16.8M17 3.6c-2.7 4.8-2.7 12 0 16.8" fill="none" stroke="#f2ede2" stroke-width="1.1" stroke-dasharray="1.6 1.4"/></svg>
+            <span>Auction Room</span>
+        </a>
+        <button id="hdr-code" class="code-btn" title="Copy room code" hidden></button>
+        <div class="top-right">
+            <span id="hdr-team"></span>
+            <span id="conn" class="conn"><i></i><span>Connecting</span></span>
+            <button id="hdr-leave" class="linkbtn" hidden>Leave</button>
         </div>
     </div>
+    <nav id="tabs" class="wrap tabs" hidden>
+        <button class="tab on" data-pane="floor">Floor</button>
+        <button class="tab" data-pane="squad">My squad<span class="n" id="n-squad"></span></button>
+        <button class="tab" data-pane="teams">Teams<span class="n" id="n-teams"></span></button>
+        <button class="tab" data-pane="players">Players</button>
+        <button class="tab" data-pane="log">Log</button>
+    </nav>
+</header>
 
-    <script>
-        // Auto-detect protocol and connect to SocketIO
-        const socket = io();
-        let username = '';
-        let roomCode = '';
-        let isOwner = false;
-        let playersData = [];
-        let currentBid = 0;
+<div id="toasts" class="toasts"></div>
 
-        // Add connection event handlers for debugging
-        socket.on('connect', function() {
-            console.log('✅ Connected to server');
-        });
+<main class="wrap">
 
-        socket.on('disconnect', function() {
-            console.log('❌ Disconnected from server');
-        });
-
-        socket.on('connect_error', function(error) {
-            console.error('❌ Connection error:', error);
-            alert('Connection error. Please refresh the page and try again.');
-        });
-        let roomSettings = {
-            max_players: 8,
-            squad_size: 11,
-            auction_order: 'random',
-            team_purse: 100
-        };
-
-        // UI Elements
-        const setupScreen = document.getElementById('setup-screen');
-        const lobbyScreen = document.getElementById('lobby-screen');
-        const auctionScreen = document.getElementById('auction-screen');
-        const resultsScreen = document.getElementById('results-screen');
-        
-        // --- Setup Screen Logic ---
-        const createUsernameInput = document.getElementById('create-username');
-        const createTeamNameInput = document.getElementById('create-team-name');
-        const playerCsvInput = document.getElementById('player-csv');
-        const createRoomBtn = document.getElementById('create-room-btn');
-        
-        const joinUsernameInput = document.getElementById('join-username');
-        const teamNameInput = document.getElementById('team-name-input');
-        const roomCodeInput = document.getElementById('room-code-input');
-        const joinRoomBtn = document.getElementById('join-room-btn');
-
-        // --- Lobby Screen Logic ---
-        const roomCodeDisplay = document.getElementById('room-code-display');
-        const playerList = document.getElementById('player-list');
-        const ownerControls = document.getElementById('owner-controls');
-        const startAuctionBtn = document.getElementById('start-auction-btn');
-        const roomSettingsDiv = document.getElementById('room-settings');
-        const maxPlayersSelect = document.getElementById('max-players-select');
-        const squadSizeSelect = document.getElementById('squad-size-select');
-        const teamPurseSelect = document.getElementById('team-purse-select');
-        const auctionOrderSelect = document.getElementById('auction-order-select');
-        const updateSettingsBtn = document.getElementById('update-settings-btn');
-        
-        // --- Auction Screen Logic ---
-        const timerDisplay = document.getElementById('timer-display');
-        const playerNameEl = document.getElementById('player-name');
-        const playerRoleEl = document.getElementById('player-role');
-        const playerNationalityEl = document.getElementById('player-nationality');
-        const playerOverallEl = document.querySelector('#player-overall span');
-        const basePriceEl = document.getElementById('base-price');
-        const currentBidEl = document.getElementById('current-bid');
-        const currentBidderEl = document.getElementById('current-bidder');
-        const soldPlayersList = document.getElementById('sold-players-list');
-        const bidHalfCrBtn = document.getElementById('bid-half-cr-btn');
-        const bidOneCrBtn = document.getElementById('bid-one-cr-btn');
-        const playerDetailsDiv = document.getElementById('player-details');
-        const bouncingLoader = document.querySelector('.bouncing-loader');
-        const auctionOwnerControls = document.getElementById('auction-owner-controls');
-        const skipPlayerBtn = document.getElementById('skip-player-btn');
-        const endAuctionBtn = document.getElementById('end-auction-btn');
-        const teamCompositionsList = document.getElementById('team-compositions-list');
-
-        // Add event listeners for auction screen save buttons
-        let currentCompositions = {};
-        let auctionTrendsChart = null;
-        let teamCompositionChart = null;
-        let spendingChart = null;
-        let roleDistributionChart = null;
-        let finalTrendsChart = null;
-        let auctionData = {
-            soldPlayers: [],
-            priceHistory: []
-        };
-
-        // --- Results Screen Logic ---
-        const teamsDisplay = document.getElementById('teams-display');
-        const saveTeamsExcelBtn = document.getElementById('save-teams-excel-btn');
-        const expensivePlayerName = document.getElementById('expensive-player-name');
-        const expensivePlayerPrice = document.getElementById('expensive-player-price');
-        const expensivePlayerBuyer = document.getElementById('expensive-player-buyer');
-        const averagePrice = document.getElementById('average-price');
-        const totalPlayersSold = document.getElementById('total-players-sold');
-
-        function formatCurrency(amount) {
-            if (amount >= 10000000) {
-                return '₹' + (amount / 10000000).toFixed(2) + ' Cr';
-            }
-            return '₹' + amount;
-        }
-
-        // Chart configuration
-        const chartOptions = {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-                legend: {
-                    labels: {
-                        color: '#e2e8f0',
-                        font: {
-                            family: 'Inter'
-                        }
-                    }
-                }
-            },
-            scales: {
-                x: {
-                    ticks: {
-                        color: '#94a3b8'
-                    },
-                    grid: {
-                        color: 'rgba(148, 163, 184, 0.1)'
-                    }
-                },
-                y: {
-                    ticks: {
-                        color: '#94a3b8'
-                    },
-                    grid: {
-                        color: 'rgba(148, 163, 184, 0.1)'
-                    }
-                }
-            }
-        };
-
-        function initializeAuctionTrendsChart() {
-            const ctx = document.getElementById('auction-trends-chart');
-            if (!ctx) return;
-
-            auctionTrendsChart = new Chart(ctx, {
-                type: 'line',
-                data: {
-                    labels: [],
-                    datasets: [{
-                        label: 'Sale Price (₹ Cr)',
-                        data: [],
-                        borderColor: 'rgb(59, 130, 246)',
-                        backgroundColor: 'rgba(59, 130, 246, 0.1)',
-                        tension: 0.4,
-                        fill: true
-                    }]
-                },
-                options: {
-                    ...chartOptions,
-                    scales: {
-                        ...chartOptions.scales,
-                        y: {
-                            ...chartOptions.scales.y,
-                            beginAtZero: true,
-                            title: {
-                                display: true,
-                                text: 'Price (₹ Cr)',
-                                color: '#94a3b8'
-                            }
-                        }
-                    }
-                }
-            });
-        }
-
-        function initializeTeamCompositionChart() {
-            const ctx = document.getElementById('team-composition-chart');
-            if (!ctx) return;
-
-            teamCompositionChart = new Chart(ctx, {
-                type: 'doughnut',
-                data: {
-                    labels: ['Batsman', 'Bowler', 'All-rounder', 'Wicket-keeper'],
-                    datasets: [{
-                        data: [0, 0, 0, 0],
-                        backgroundColor: [
-                            'rgba(59, 130, 246, 0.8)',
-                            'rgba(239, 68, 68, 0.8)',
-                            'rgba(34, 197, 94, 0.8)',
-                            'rgba(245, 158, 11, 0.8)'
-                        ],
-                        borderColor: [
-                            'rgb(59, 130, 246)',
-                            'rgb(239, 68, 68)',
-                            'rgb(34, 197, 94)',
-                            'rgb(245, 158, 11)'
-                        ],
-                        borderWidth: 2
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: {
-                            position: 'bottom',
-                            labels: {
-                                color: '#e2e8f0',
-                                font: {
-                                    family: 'Inter'
-                                },
-                                padding: 20
-                            }
-                        }
-                    }
-                }
-            });
-        }
-
-        function updateAuctionTrendsChart() {
-            if (!auctionTrendsChart) return;
-
-            const soldPlayers = auctionData.soldPlayers.filter(p => p.winner);
-            const labels = soldPlayers.map(p => p.player.name);
-            const prices = soldPlayers.map(p => p.final_bid / 10000000);
-
-            auctionTrendsChart.data.labels = labels;
-            auctionTrendsChart.data.datasets[0].data = prices;
-            auctionTrendsChart.update();
-        }
-
-        function updateTeamCompositionChart() {
-            if (!teamCompositionChart || !currentCompositions) return;
-
-            const totalRoles = { 'Batsman': 0, 'Bowler': 0, 'All-rounder': 0, 'Wicket-keeper': 0 };
-
-            Object.values(currentCompositions).forEach(team => {
-                Object.entries(team.roles).forEach(([role, count]) => {
-                    if (totalRoles.hasOwnProperty(role)) {
-                        totalRoles[role] += count;
-                    }
-                });
-            });
-
-            teamCompositionChart.data.datasets[0].data = Object.values(totalRoles);
-            teamCompositionChart.update();
-        }
-
-        function initializeResultsCharts(teams, soldPlayers) {
-            // Spending Chart
-            const spendingCtx = document.getElementById('spending-chart');
-            if (spendingCtx) {
-                const teamNames = Object.keys(teams);
-                const teamSpending = teamNames.map(team => {
-                    return teams[team].reduce((sum, p) => sum + p.final_bid, 0) / 10000000;
-                });
-
-                spendingChart = new Chart(spendingCtx, {
-                    type: 'bar',
-                    data: {
-                        labels: teamNames,
-                        datasets: [{
-                            label: 'Total Spending (₹ Cr)',
-                            data: teamSpending,
-                            backgroundColor: 'rgba(34, 197, 94, 0.8)',
-                            borderColor: 'rgb(34, 197, 94)',
-                            borderWidth: 2
-                        }]
-                    },
-                    options: {
-                        ...chartOptions,
-                        scales: {
-                            ...chartOptions.scales,
-                            y: {
-                                ...chartOptions.scales.y,
-                                beginAtZero: true,
-                                title: {
-                                    display: true,
-                                    text: 'Spending (₹ Cr)',
-                                    color: '#94a3b8'
-                                }
-                            }
-                        }
-                    }
-                });
-            }
-
-            // Role Distribution Chart
-            const roleCtx = document.getElementById('role-distribution-chart');
-            if (roleCtx) {
-                const allRoles = { 'Batsman': 0, 'Bowler': 0, 'All-rounder': 0, 'Wicket-keeper': 0 };
-
-                Object.values(teams).forEach(teamPlayers => {
-                    teamPlayers.forEach(p => {
-                        if (allRoles.hasOwnProperty(p.player.role)) {
-                            allRoles[p.player.role]++;
-                        }
-                    });
-                });
-
-                roleDistributionChart = new Chart(roleCtx, {
-                    type: 'pie',
-                    data: {
-                        labels: Object.keys(allRoles),
-                        datasets: [{
-                            data: Object.values(allRoles),
-                            backgroundColor: [
-                                'rgba(59, 130, 246, 0.8)',
-                                'rgba(239, 68, 68, 0.8)',
-                                'rgba(34, 197, 94, 0.8)',
-                                'rgba(245, 158, 11, 0.8)'
-                            ],
-                            borderColor: [
-                                'rgb(59, 130, 246)',
-                                'rgb(239, 68, 68)',
-                                'rgb(34, 197, 94)',
-                                'rgb(245, 158, 11)'
-                            ],
-                            borderWidth: 2
-                        }]
-                    },
-                    options: {
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        plugins: {
-                            legend: {
-                                position: 'bottom',
-                                labels: {
-                                    color: '#e2e8f0',
-                                    font: {
-                                        family: 'Inter'
-                                    },
-                                    padding: 20
-                                }
-                            }
-                        }
-                    }
-                });
-            }
-
-            // Final Trends Chart
-            const trendsCtx = document.getElementById('final-trends-chart');
-            if (trendsCtx) {
-                const soldPlayersWithWinners = soldPlayers.filter(p => p.winner);
-                const labels = soldPlayersWithWinners.map(p => p.player.name);
-                const prices = soldPlayersWithWinners.map(p => p.final_bid / 10000000);
-
-                finalTrendsChart = new Chart(trendsCtx, {
-                    type: 'line',
-                    data: {
-                        labels: labels,
-                        datasets: [{
-                            label: 'Sale Price (₹ Cr)',
-                            data: prices,
-                            borderColor: 'rgb(147, 51, 234)',
-                            backgroundColor: 'rgba(147, 51, 234, 0.1)',
-                            tension: 0.4,
-                            fill: true,
-                            pointBackgroundColor: 'rgb(147, 51, 234)',
-                            pointBorderColor: '#fff',
-                            pointBorderWidth: 2,
-                            pointRadius: 5
-                        }]
-                    },
-                    options: {
-                        ...chartOptions,
-                        scales: {
-                            ...chartOptions.scales,
-                            x: {
-                                ...chartOptions.scales.x,
-                                title: {
-                                    display: true,
-                                    text: 'Auction Sequence',
-                                    color: '#94a3b8'
-                                }
-                            },
-                            y: {
-                                ...chartOptions.scales.y,
-                                beginAtZero: true,
-                                title: {
-                                    display: true,
-                                    text: 'Price (₹ Cr)',
-                                    color: '#94a3b8'
-                                }
-                            }
-                        }
-                    }
-                });
-            }
-        }
-
-        function showScreen(screen) {
-            setupScreen.classList.add('hidden');
-            lobbyScreen.classList.add('hidden');
-            auctionScreen.classList.add('hidden');
-            resultsScreen.classList.add('hidden');
-            screen.classList.remove('hidden');
-        }
-        
-        function parseCSV(csvText) {
-            const lines = csvText.split('\n').filter(line => line.trim() !== '');
-            const headers = lines[0].split(',').map(h => h.trim());
-            const players = [];
-            for (let i = 1; i < lines.length; i++) {
-                const values = lines[i].split(',').map(v => v.trim());
-                if (values.length === headers.length) {
-                    const player = {
-                        name: values[0],
-                        overall: parseInt(values[1]),
-                        role: values[2],
-                        nationality: values[3]
-                        // base_price will be calculated on the server side
-                    };
-                    players.push(player);
-                }
-            }
-            return players;
-        }
-
-        createRoomBtn.addEventListener('click', () => {
-            console.log('🎯 Create Room button clicked');
-
-            // Check if socket is connected
-            if (!socket.connected) {
-                alert('Not connected to server. Please refresh the page and try again.');
-                console.error('❌ Socket not connected');
-                return;
-            }
-
-            username = createUsernameInput.value.trim();
-            const teamName = createTeamNameInput.value.trim();
-            const file = playerCsvInput.files[0];
-
-            console.log('📝 Form data:', { username, teamName, file: file ? file.name : 'No file' });
-
-            if (!username) {
-                alert('Please enter your name.');
-                return;
-            }
-            if (!file) {
-                alert('Please upload a player CSV file.');
-                return;
-            }
-
-            // Disable button to prevent double clicks
-            createRoomBtn.disabled = true;
-            createRoomBtn.textContent = 'Creating Room...';
-
-            const reader = new FileReader();
-            reader.onload = function(event) {
-                try {
-                    console.log('📄 Reading CSV file...');
-                    const csvData = event.target.result;
-                    playersData = parseCSV(csvData);
-                    console.log('✅ Parsed players:', playersData.length);
-
-                    if (playersData.length === 0) {
-                        alert('Could not parse any players from the CSV. Please check the format.');
-                        createRoomBtn.disabled = false;
-                        createRoomBtn.textContent = 'Create Auction Room';
-                        return;
-                    }
-
-                    isOwner = true;
-                    console.log('🚀 Emitting create_room event...');
-                    socket.emit('create_room', {
-                        username: username,
-                        team_name: teamName || username, // Use team name if provided, else username
-                        players: playersData
-                    });
-                } catch (error) {
-                    console.error('❌ Error processing CSV:', error);
-                    alert('Error processing CSV file. Please check the format and try again.');
-                    createRoomBtn.disabled = false;
-                    createRoomBtn.textContent = 'Create Auction Room';
-                }
-            };
-
-            reader.onerror = function() {
-                console.error('❌ Error reading file');
-                alert('Error reading file. Please try again.');
-                createRoomBtn.disabled = false;
-                createRoomBtn.textContent = 'Create Auction Room';
-            };
-
-            reader.readAsText(file);
-        });
-
-        joinRoomBtn.addEventListener('click', () => {
-            username = joinUsernameInput.value.trim();
-            const teamName = teamNameInput.value.trim();
-            roomCode = roomCodeInput.value.trim().toUpperCase();
-            if (!username) {
-                alert('Please enter your name.');
-                return;
-            }
-            if (!roomCode) {
-                alert('Please enter a room code.');
-                return;
-            }
-            socket.emit('join_room', {
-                username: username,
-                team_name: teamName || username, // Use team name if provided, else username
-                room_code: roomCode
-            });
-        });
-        
-        startAuctionBtn.addEventListener('click', () => {
-            socket.emit('start_auction', { room_code: roomCode });
-        });
-
-        updateSettingsBtn.addEventListener('click', () => {
-            const settings = {
-                room_code: roomCode,
-                username: username,
-                max_players: parseInt(maxPlayersSelect.value),
-                squad_size: parseInt(squadSizeSelect.value),
-                team_purse: parseInt(teamPurseSelect.value),
-                auction_order: auctionOrderSelect.value
-            };
-            socket.emit('update_room_settings', settings);
-        });
-
-        skipPlayerBtn.addEventListener('click', () => {
-            if (confirm('Are you sure you want to skip this player?')) {
-                socket.emit('skip_player', { room_code: roomCode });
-            }
-        });
-
-        endAuctionBtn.addEventListener('click', () => {
-            if (confirm('Are you sure you want to end the auction early?')) {
-                socket.emit('end_auction_early', { room_code: roomCode });
-            }
-        });
-
-        bidHalfCrBtn.addEventListener('click', () => {
-            const bidAmount = currentBid + 5000000; // 0.5 Cr
-            socket.emit('place_bid', { room_code: roomCode, bid_amount: bidAmount, bidder: username });
-        });
-
-        bidOneCrBtn.addEventListener('click', () => {
-            const bidAmount = currentBid + 10000000; // 1 Cr
-            socket.emit('place_bid', { room_code: roomCode, bid_amount: bidAmount, bidder: username });
-        });
-
-        // Socket.IO Event Handlers
-        socket.on('room_created', (data) => {
-            console.log('✅ Room created successfully:', data);
-
-            // Re-enable the create room button
-            createRoomBtn.disabled = false;
-            createRoomBtn.textContent = 'Create Auction Room';
-
-            roomCode = data.room_code;
-            showScreen(lobbyScreen);
-            roomCodeDisplay.textContent = roomCode;
-            updatePlayerList(data.players);
-            if (isOwner) {
-                ownerControls.classList.remove('hidden');
-                roomSettingsDiv.classList.remove('hidden');
-
-                // Update settings UI with server values
-                if (data.room_settings) {
-                    maxPlayersSelect.value = data.room_settings.max_players;
-                    squadSizeSelect.value = data.room_settings.squad_size;
-                    teamPurseSelect.value = data.room_settings.team_purse;
-                    auctionOrderSelect.value = data.room_settings.auction_order;
-                }
-            }
-        });
-
-        // Add error handling for room creation
-        socket.on('error', (data) => {
-            console.error('❌ Server error:', data);
-            alert('Error: ' + (data.message || 'Something went wrong. Please try again.'));
-
-            // Re-enable the create room button
-            createRoomBtn.disabled = false;
-            createRoomBtn.textContent = 'Create Auction Room';
-        });
-
-        socket.on('room_joined', (data) => {
-            roomCode = data.room_code;
-            showScreen(lobbyScreen);
-            roomCodeDisplay.textContent = roomCode;
-            updatePlayerList(data.players);
-        });
-        
-        socket.on('player_joined', (data) => {
-            updatePlayerList(data.players);
-        });
-
-        function updatePlayerList(players) {
-            playerList.innerHTML = '';
-            players.forEach((player, index) => {
-                const playerCard = document.createElement('div');
-                playerCard.className = 'glass-effect rounded-xl p-4 border border-dark-600 card-hover';
-                playerCard.innerHTML = `
-                    <div class="flex items-center">
-                        <div class="w-10 h-10 bg-gradient-to-r from-primary-500 to-primary-700 rounded-full flex items-center justify-center mr-3 text-white font-bold">
-                            ${index + 1}
-                        </div>
-                        <div>
-                            <p class="font-semibold text-white">${player}</p>
-                            <p class="text-sm text-dark-300">Team ${index + 1}</p>
-                        </div>
+<!-- ======================= setup ======================= -->
+<section id="screen-setup">
+    <div class="setup">
+        <div class="hero">
+            <div class="caps" style="margin-bottom:16px">Live player auction</div>
+            <h1>Pick your XI.<br><em>Outbid</em> your mates.</h1>
+            <p>Open a room, share the code, and bid on players in real time. The best players go under the hammer first.</p>
+            <ol>
+                <li>Create a room and set the purse, squad size and timer.</li>
+                <li>Friends join with the code or the invite link.</li>
+                <li>Bid in batches: top, mid, then the rest. The auctioneer can skip a batch.</li>
+                <li>Download every squad as a spreadsheet, during or after.</li>
+            </ol>
+        </div>
+        <div>
+            <div id="resume" class="resume" hidden></div>
+            <div class="seg">
+                <button class="on" data-mode="create">Start a room</button>
+                <button data-mode="join">Join a room</button>
+            </div>
+            <form id="form-create" autocomplete="off">
+                <label class="field"><span class="caps">Your name</span><input id="c-name" class="input" maxlength="30" required></label>
+                <label class="field"><span class="caps">Team name</span><input id="c-team" class="input" maxlength="30" placeholder="Defaults to your name"></label>
+                <div class="field">
+                    <span class="caps">Player pool</span>
+                    <div class="choice">
+                        <label><input type="radio" name="source" value="default" checked>Built-in list<small id="default-count"></small></label>
+                        <label><input type="radio" name="source" value="csv">Upload a CSV<small>your own players</small></label>
                     </div>
-                `;
-                playerList.appendChild(playerCard);
-            });
-        }
+                    <div id="csv-box" hidden style="margin-top:10px">
+                        <input id="c-csv" type="file" accept=".csv,text/csv" class="input" style="padding:8px">
+                        <p class="hint">Needs a header row with at least Name and Overall. Role and Nationality are optional, and the column order does not matter.</p>
+                    </div>
+                </div>
+                <button id="btn-create" class="btn wide" type="submit">Create room</button>
+            </form>
+            <form id="form-join" autocomplete="off" hidden>
+                <label class="field"><span class="caps">Room code</span><input id="j-code" class="input mono" style="text-transform:uppercase;letter-spacing:.2em;font-size:20px" maxlength="8" required></label>
+                <label class="field"><span class="caps">Your name</span><input id="j-name" class="input" maxlength="30" required></label>
+                <label class="field"><span class="caps">Team name</span><input id="j-team" class="input" maxlength="30" placeholder="Defaults to your name"></label>
+                <button id="btn-join" class="btn wide" type="submit">Join room</button>
+            </form>
+        </div>
+    </div>
+</section>
 
-        function updateTeamCompositions(compositions) {
-            currentCompositions = compositions; // Store for export functionality
-            teamCompositionsList.innerHTML = '';
+<!-- ======================= lobby ======================= -->
+<section id="screen-lobby" hidden>
+    <div class="lobby">
+        <div>
+            <div class="caps">Room code</div>
+            <div id="lobby-code" class="code-big"></div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:36px">
+                <button id="btn-copy-code" class="btn ghost sm">Copy code</button>
+                <button id="btn-copy-link" class="btn ghost sm">Copy invite link</button>
+            </div>
+            <div class="h-section"><h2>Teams</h2><span class="aside mono" id="lobby-count"></span></div>
+            <ol id="lobby-teams" class="register"></ol>
+        </div>
+        <div>
+            <div class="h-section"><h2>Rules</h2><span class="aside" id="settings-note"></span></div>
+            <div id="settings-form"></div>
+            <div class="h-section" style="margin-top:30px"><h2>Pool</h2><span class="aside mono" id="pool-size"></span></div>
+            <div id="pool-summary"></div>
+            <div id="lobby-start" style="margin-top:28px"></div>
+        </div>
+    </div>
+</section>
 
-            for (const [bidder, data] of Object.entries(compositions)) {
-                const totalSpent = formatCurrency(data.total_spent);
-                const remainingPurse = formatCurrency(data.remaining_purse);
-                const playerCount = data.players.length;
+<!-- ======================= auction ======================= -->
+<section id="screen-auction" hidden>
+    <div data-pane-body="floor">
+        <div class="floor">
+            <div>
+                <div id="lot" class="lot"></div>
+                <div id="gavel"></div>
+            </div>
+            <div>
+                <div class="h-section"><h2>Standings</h2></div>
+                <table class="t" id="standings"></table>
+                <div class="h-section" style="margin-top:30px"><h2>Up next</h2><span class="aside" id="next-batch"></span></div>
+                <table class="t" id="upnext"></table>
+            </div>
+        </div>
+    </div>
+    <div data-pane-body="squad" hidden><div id="my-squad"></div></div>
+    <div data-pane-body="teams" hidden>
+        <div class="h-section"><h2>All teams</h2><span class="aside"><button class="linkbtn" data-export="xlsx">Download Excel</button> &nbsp; <button class="linkbtn" data-export="json">JSON</button></span></div>
+        <div id="all-teams"></div>
+    </div>
+    <div data-pane-body="players" hidden>
+        <div class="cols-2">
+            <div><div class="h-section"><h2>Batches</h2><span class="aside mono" id="sold-unsold"></span></div><ul id="batches" class="batches"></ul></div>
+            <div><div class="h-section"><h2>Next five</h2></div><table class="t" id="upnext-2"></table></div>
+        </div>
+    </div>
+    <div data-pane-body="log" hidden>
+        <div class="h-section"><h2>Log</h2><span class="aside">newest first</span></div>
+        <ol id="log" class="log"></ol>
+    </div>
+</section>
 
-                // Create role distribution visualization
-                const roles = data.roles;
-                const roleColors = {
-                    'Batsman': 'from-blue-500 to-blue-600',
-                    'Bowler': 'from-red-500 to-red-600',
-                    'All-rounder': 'from-green-500 to-green-600',
-                    'Wicket-keeper': 'from-yellow-500 to-yellow-600'
-                };
+<!-- ======================= results ======================= -->
+<section id="screen-results" hidden>
+    <div class="res-head">
+        <div><div class="caps red">Hammer down</div><h1>Final squads</h1></div>
+        <div class="actions">
+            <button class="btn" data-export="xlsx">Download Excel</button>
+            <button class="btn ghost" data-export="json">JSON</button>
+            <button id="btn-new" class="btn ghost">New auction</button>
+        </div>
+    </div>
+    <div id="res-figures" class="figures"></div>
+    <div class="charts">
+        <div><div class="h-section"><h2>Spend</h2><span class="aside">crore, spent and left</span></div><div class="chart-box"><canvas id="chart-spend"></canvas></div></div>
+        <div><div class="h-section"><h2>Make-up</h2><span class="aside">players by role</span></div><div class="chart-box"><canvas id="chart-roles"></canvas></div></div>
+    </div>
+    <div id="res-teams" class="res-teams"></div>
+    <details id="res-unsold" class="team" style="margin-top:36px">
+        <summary><span class="tn"></span></summary>
+        <div><table class="t"></table></div>
+    </details>
+</section>
+</main>
 
-                let rolesHtml = '';
-                for (const [role, count] of Object.entries(roles)) {
-                    if (count > 0) {
-                        rolesHtml += `
-                            <div class="flex items-center justify-between text-xs mb-2">
-                                <span class="flex items-center">
-                                    <div class="w-3 h-3 bg-gradient-to-r ${roleColors[role] || 'from-gray-500 to-gray-600'} rounded-full mr-2"></div>
-                                    <span class="text-dark-200">${role}</span>
-                                </span>
-                                <span class="font-semibold text-white">${count}</span>
-                            </div>`;
-                    }
-                }
+<footer id="bidbar" class="bidbar" hidden><div class="wrap" id="bidbar-inner"></div></footer>
 
-                const teamCard = `
-                    <div class="bg-dark-800 rounded-xl p-4 border border-dark-600">
-                        <div class="flex items-center mb-3">
-                            <div class="w-8 h-8 bg-gradient-to-r from-primary-500 to-primary-700 rounded-lg flex items-center justify-center mr-3">
-                                <span class="text-white font-bold text-sm">${bidder.charAt(0).toUpperCase()}</span>
-                            </div>
-                            <h4 class="font-bold text-white text-sm">${bidder}</h4>
-                        </div>
-                        <div class="space-y-2 mb-3">
-                            <div class="flex justify-between text-xs">
-                                <span class="text-dark-300">Players:</span>
-                                <span class="font-semibold text-white">${playerCount}</span>
-                            </div>
-                            <div class="flex justify-between text-xs">
-                                <span class="text-dark-300">Spent:</span>
-                                <span class="font-semibold text-green-400">${totalSpent}</span>
-                            </div>
-                            <div class="flex justify-between text-xs">
-                                <span class="text-dark-300">Remaining:</span>
-                                <span class="font-semibold text-yellow-400">${remainingPurse}</span>
-                            </div>
-                        </div>
-                        <div class="border-t border-dark-600 pt-3">
-                            ${rolesHtml}
-                        </div>
-                    </div>`;
-                teamCompositionsList.innerHTML += teamCard;
-            }
-        }
+{% raw %}
+<script>
+(() => {
+'use strict';
 
-        // Add event listeners for auction screen save buttons (only add once)
-        let auctionSaveListenersAdded = false;
-        function addAuctionSaveListeners() {
-            if (auctionSaveListenersAdded) return;
-            auctionSaveListenersAdded = true;
+// ------------------------------------------------------------------ helpers
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const esc = (v) => String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const CR = 100;   // money is integer lakhs; 100 L = 1 Cr
 
-            // JSON Export for auction screen
-            document.addEventListener('click', (e) => {
-                if (e.target && e.target.id === 'save-teams-btn' && currentCompositions) {
-                    const dataStr = JSON.stringify(currentCompositions, null, 2);
-                    const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
+function fmt(lakhs) {
+    const n = Math.round(Number(lakhs) || 0);
+    if (n === 0) return '₹0';
+    if (Math.abs(n) < CR) return `₹${n}L`;
+    return `₹${(n / CR).toFixed(2).replace(/\.?0+$/, '')} Cr`;
+}
+const toCr = (l) => Math.round(((Number(l) || 0) / CR) * 100) / 100;
+const plural = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`;
 
-                    const linkElement = document.createElement('a');
-                    linkElement.setAttribute('href', dataUri);
-                    linkElement.setAttribute('download', 'cricket_auction_live_teams.json');
-                    linkElement.click();
-                }
+const ROLES = ['Batsman', 'Bowler', 'All-rounder', 'Wicket-keeper'];
+const ROLE_SHORT = { 'Batsman': 'BAT', 'Bowler': 'BOWL', 'All-rounder': 'AR', 'Wicket-keeper': 'WK' };
+const ROLE_COLOR = { 'Batsman': '#2f4b7c', 'Bowler': '#b3261e', 'All-rounder': '#2e5e3e', 'Wicket-keeper': '#9a6f17' };
+const role = (r) => `<span class="role ${ROLE_SHORT[r] || ''}">${esc(ROLE_SHORT[r] || r)}</span>`;
+const TEAM_COLORS = ['#1c1b18', '#b3261e', '#2e5e3e', '#9a6f17', '#2f4b7c', '#6d3b5e', '#2a7570', '#a4552a', '#5b6b2e', '#7a6a58', '#3f3f8f', '#8f3f6f'];
 
-                // CSV Export for auction screen
-                if (e.target && e.target.id === 'save-teams-csv-btn' && currentCompositions) {
-                    const wb = XLSX.utils.book_new();
+function toast(msg, kind = 'info', ms = 3200) {
+    const box = $('#toasts');
+    const el = document.createElement('div');
+    el.className = `toast ${kind}`;
+    el.textContent = msg;
+    box.appendChild(el);
+    const max = window.innerWidth < 640 ? 2 : 4;
+    while (box.children.length > max) box.firstChild.remove();
+    if (window.innerWidth < 640) ms = Math.min(ms, 2200);
+    setTimeout(() => { el.style.transition = 'opacity .25s'; el.style.opacity = '0'; setTimeout(() => el.remove(), 260); }, ms);
+}
+async function copy(text, label) {
+    try { await navigator.clipboard.writeText(text); toast(`${label} copied`, 'success', 1600); }
+    catch { prompt(`Copy ${label.toLowerCase()}:`, text); }
+}
 
-                    // Create a summary sheet
-                    const summaryData = [
-                        ['Team Name', 'Players Count', 'Total Spent (Cr)', 'Remaining Purse (Cr)', 'Batsmen', 'Bowlers', 'All-rounders', 'Wicket-keepers']
-                    ];
+// ------------------------------------------------------------------ session
+// The seat lives in sessionStorage, so each browser tab can be a different
+// team (handy for testing on one machine). The last room is also kept in
+// localStorage so a closed tab can rejoin from the start screen.
+const TAB_KEY = 'auctionRoom.tab', LAST_KEY = 'auctionRoom.last';
+const store = {
+    get(area, k) { try { return JSON.parse(window[area].getItem(k)) || null; } catch { return null; } },
+    set(area, k, v) { try { window[area].setItem(k, JSON.stringify(v)); } catch {} },
+    del(area, k) { try { window[area].removeItem(k); } catch {} },
+};
+let me = store.get('sessionStorage', TAB_KEY);   // { code, token, teamId, team }
+let S = null;
+let pane = 'floor';
+let lotClock = null, phaseClock = null, lastLogId = 0;
 
-                    for (const [teamName, teamData] of Object.entries(currentCompositions)) {
-                        summaryData.push([
-                            teamName,
-                            teamData.players.length,
-                            (teamData.total_spent / 10000000).toFixed(2),
-                            (teamData.remaining_purse / 10000000).toFixed(2),
-                            teamData.roles.Batsman || 0,
-                            teamData.roles.Bowler || 0,
-                            teamData.roles['All-rounder'] || 0,
-                            teamData.roles['Wicket-keeper'] || 0
-                        ]);
-                    }
+// ------------------------------------------------------------------ socket
+const socket = io({ reconnectionDelayMax: 4000 });
+function call(event, payload = {}) {
+    return new Promise((resolve) => {
+        if (!socket.connected) return resolve({ ok: false, error: 'Not connected yet, try again in a moment.' });
+        socket.timeout(8000).emit(event, payload, (err, res) =>
+            resolve(err ? { ok: false, error: 'The server did not answer. Check your connection.' } : (res || { ok: false, error: 'No response' })));
+    });
+}
+function setConn(state) {
+    const el = $('#conn');
+    el.className = 'conn ' + ({ online: 'on', offline: 'off' }[state] || '');
+    $('span', el).textContent = { online: 'Live', offline: 'Reconnecting', connecting: 'Connecting' }[state];
+}
+socket.on('connect', async () => {
+    setConn('online');
+    if (me && me.code && me.token) {
+        const res = await call('rejoin', { room_code: me.code, token: me.token });
+        if (res.ok) applyState(res.state);
+        else { dropSession(); toast(res.error, 'warn'); }
+    }
+});
+socket.on('disconnect', () => setConn('offline'));
+socket.io.on('reconnect_attempt', () => setConn('offline'));
+socket.on('state', applyState);
 
-                    const summaryWs = XLSX.utils.aoa_to_sheet(summaryData);
-                    XLSX.utils.book_append_sheet(wb, summaryWs, 'Summary');
+function applyState(snap) {
+    if (!me || !snap || snap.code !== me.code) return;
+    if (S && S.code === snap.code && snap.v <= S.v) return;   // stale or out of order
+    const prev = S;
+    S = snap;
+    notify(prev, snap);
+    render(prev);
+}
+function dropSession() {
+    store.del('sessionStorage', TAB_KEY);
+    me = null; S = null;
+    destroyCharts();
+    showScreen('setup');
+}
 
-                    // Create individual sheets for each team
-                    for (const [teamName, teamData] of Object.entries(currentCompositions)) {
-                        const teamSheetData = [
-                            ['Player Name', 'Role', 'Nationality', 'Overall Rating', 'Purchase Price (Cr)']
-                        ];
+// ------------------------------------------------------------------ toasts from state changes
+function notify(prev, s) {
+    for (const e of s.log) if (prev && e.id > lastLogId && (e.kind === 'batch' || e.kind === 'end')) toast(e.text);
+    if (s.log.length) lastLogId = s.log[s.log.length - 1].id;
+    if (!prev) return;
+    if (prev.lot && s.lot && prev.lot.lot_id === s.lot.lot_id && prev.lot.bidder_id === me.teamId && s.lot.bidder_id !== me.teamId)
+        toast(`Outbid. ${s.lot.bidder} went ${fmt(s.lot.bid)}`, 'warn', 2400);
+    if (s.last_result && s.last_result.winner_id === me.teamId && prev.last_result?.player.pid !== s.last_result.player.pid)
+        toast(`${s.last_result.player.name} is yours for ${fmt(s.last_result.price)} :)`, 'success');
+    if (prev.owner_id !== s.owner_id && s.owner_id === me.teamId) toast('You are now the auctioneer');
+}
 
-                        teamData.players.forEach(player => {
-                            teamSheetData.push([
-                                player.name,
-                                player.role,
-                                player.nationality,
-                                player.overall,
-                                (player.price / 10000000).toFixed(2)
-                            ]);
-                        });
+// ------------------------------------------------------------------ screens and tabs
+const SCREENS = ['setup', 'lobby', 'auction', 'results'];
+let screen = 'setup';
+function showScreen(name) {
+    screen = name;
+    SCREENS.forEach(n => { $(`#screen-${n}`).hidden = n !== name; });
+    const inRoom = name !== 'setup';
+    $('#hdr-code').hidden = !inRoom;
+    $('#hdr-leave').hidden = !inRoom;
+    $('#tabs').hidden = name !== 'auction';
+    if (name !== 'auction') $('#bidbar').hidden = true;
+    if (!inRoom) { $('#hdr-team').textContent = ''; renderResume(); }
+}
+function setPane(p) {
+    pane = p;
+    $$('.tab').forEach(t => t.classList.toggle('on', t.dataset.pane === p));
+    $$('[data-pane-body]').forEach(b => { b.hidden = b.dataset.paneBody !== p; });
+    window.scrollTo({ top: 0 });
+}
+$$('.tab').forEach(t => t.addEventListener('click', () => setPane(t.dataset.pane)));
 
-                        // Add team summary at the bottom
-                        teamSheetData.push([]);
-                        teamSheetData.push(['Team Summary']);
-                        teamSheetData.push(['Total Players', teamData.players.length]);
-                        teamSheetData.push(['Total Spent (Cr)', (teamData.total_spent / 10000000).toFixed(2)]);
-                        teamSheetData.push(['Remaining Purse (Cr)', (teamData.remaining_purse / 10000000).toFixed(2)]);
-                        teamSheetData.push(['Batsmen', teamData.roles.Batsman || 0]);
-                        teamSheetData.push(['Bowlers', teamData.roles.Bowler || 0]);
-                        teamSheetData.push(['All-rounders', teamData.roles['All-rounder'] || 0]);
-                        teamSheetData.push(['Wicket-keepers', teamData.roles['Wicket-keeper'] || 0]);
+function render(prev) {
+    const mine = S.teams.find(t => t.id === me.teamId);
+    if (!mine) { dropSession(); toast('You are no longer in that room', 'warn'); return; }
+    $('#hdr-code').textContent = S.code;
+    $('#hdr-team').textContent = mine.team + (S.owner_id === me.teamId ? ' (auctioneer)' : '');
+    if (S.phase === 'lobby') { showScreen('lobby'); renderLobby(); }
+    else if (S.phase === 'finished') { showScreen('results'); renderResults(prev); }
+    else { if (screen !== 'auction') setPane('floor'); showScreen('auction'); renderAuction(prev); }
+}
 
-                        const teamWs = XLSX.utils.aoa_to_sheet(teamSheetData);
-                        // Clean team name for sheet name (remove special characters)
-                        const cleanTeamName = teamName.replace(/[^\w\s]/gi, '').substring(0, 31);
-                        XLSX.utils.book_append_sheet(wb, teamWs, cleanTeamName);
-                    }
+// ------------------------------------------------------------------ setup
+$('#default-count').textContent = `${$('meta[name="default-pool"]').content} players`;
+$$('.seg button').forEach(b => b.addEventListener('click', () => {
+    $$('.seg button').forEach(x => x.classList.toggle('on', x === b));
+    $('#form-create').hidden = b.dataset.mode !== 'create';
+    $('#form-join').hidden = b.dataset.mode !== 'join';
+}));
+$$('input[name="source"]').forEach(r => r.addEventListener('change', () => { $('#csv-box').hidden = $('input[name="source"]:checked').value !== 'csv'; }));
+const urlRoom = new URLSearchParams(location.search).get('room');
+if (urlRoom) { $('#j-code').value = urlRoom.toUpperCase(); $('.seg [data-mode="join"]').click(); }
 
-                    // Save the file
-                    XLSX.writeFile(wb, 'cricket_auction_live_teams.xlsx');
-                }
-            });
-        }
-        
-        function updateAuctionUI(data) {
-             playerDetailsDiv.classList.remove('hidden');
-             bouncingLoader.classList.add('hidden');
+function renderResume() {
+    const last = store.get('localStorage', LAST_KEY);
+    const box = $('#resume');
+    box.hidden = !last || !!me;
+    if (box.hidden) return;
+    box.innerHTML = `<span>Last room <b class="mono">${esc(last.code)}</b> as ${esc(last.team)}</span>
+        <button class="btn sm" style="margin-left:auto" id="btn-resume">Rejoin</button>
+        <button class="linkbtn" id="btn-forget">Forget</button>`;
+    $('#btn-resume').onclick = async () => {
+        const res = await call('rejoin', { room_code: last.code, token: last.token });
+        if (!res.ok) { store.del('localStorage', LAST_KEY); renderResume(); return toast(res.error, 'error'); }
+        enterRoom(res, last.team);
+    };
+    $('#btn-forget').onclick = () => { store.del('localStorage', LAST_KEY); renderResume(); };
+}
 
-            playerNameEl.textContent = data.player.name;
-            playerRoleEl.textContent = data.player.role;
-            playerNationalityEl.textContent = data.player.nationality;
-            playerOverallEl.textContent = data.player.overall;
-            basePriceEl.textContent = formatCurrency(data.player.base_price);
-            
-            currentBid = data.current_bid;
-            currentBidEl.textContent = formatCurrency(data.current_bid);
-            currentBidderEl.textContent = data.current_bidder || 'None';
-        }
+function busy(btn, on, label) {
+    btn.disabled = on;
+    if (on) { btn.dataset.label = btn.textContent; btn.textContent = label; } else if (btn.dataset.label) btn.textContent = btn.dataset.label;
+}
+function enterRoom(res, teamName) {
+    me = { code: res.room_code, token: res.token, teamId: res.team_id, team: teamName };
+    store.set('sessionStorage', TAB_KEY, me);
+    store.set('localStorage', LAST_KEY, me);
+    lastLogId = 0;
+    history.replaceState(null, '', location.pathname);
+    applyState(res.state);
+}
 
-        socket.on('room_settings_updated', (data) => {
-            // Update local settings display
-            maxPlayersSelect.value = data.max_players;
-            squadSizeSelect.value = data.squad_size;
-            teamPurseSelect.value = data.team_purse;
-            auctionOrderSelect.value = data.auction_order;
-        });
+$('#form-create').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const btn = $('#btn-create');
+    const p = { name: $('#c-name').value.trim(), team: $('#c-team').value.trim(), source: $('input[name="source"]:checked').value };
+    if (!p.name) return toast('Enter your name', 'error');
+    if (p.source === 'csv') {
+        const f = $('#c-csv').files[0];
+        if (!f) return toast('Choose a CSV file, or use the built-in list', 'error');
+        if (f.size > 2_500_000) return toast('That CSV is over 2.5 MB', 'error');
+        p.csv_text = await f.text();
+    }
+    busy(btn, true, 'Creating...');
+    const res = await call('create_room', p);
+    busy(btn, false);
+    if (!res.ok) return toast(res.error, 'error', 5000);
+    enterRoom(res, p.team || p.name);
+    if (res.skipped_rows) toast(`Loaded ${res.players_loaded} players, skipped ${res.skipped_rows} bad rows`, 'warn', 5000);
+});
+$('#form-join').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const btn = $('#btn-join');
+    const p = { room_code: $('#j-code').value.trim().toUpperCase(), name: $('#j-name').value.trim(), team: $('#j-team').value.trim() };
+    if (!p.room_code) return toast('Enter the room code', 'error');
+    if (!p.name) return toast('Enter your name', 'error');
+    busy(btn, true, 'Joining...');
+    const res = await call('join_room', p);
+    busy(btn, false);
+    if (!res.ok) return toast(res.error, 'error', 5000);
+    enterRoom(res, p.team || p.name);
+});
 
-        socket.on('team_compositions_update', (data) => {
-            updateTeamCompositions(data.compositions);
-            updateTeamCompositionChart();
-        });
+$('#hdr-code').addEventListener('click', () => S && copy(S.code, 'Room code'));
+$('#btn-copy-code').addEventListener('click', () => S && copy(S.code, 'Room code'));
+$('#btn-copy-link').addEventListener('click', () => S && copy(`${location.origin}${location.pathname}?room=${S.code}`, 'Invite link'));
+$('#hdr-leave').addEventListener('click', async () => {
+    const running = S && S.phase !== 'lobby' && S.phase !== 'finished';
+    if (running && !confirm('Leave the auction? Your team stays in and you can rejoin from the start screen.')) return;
+    await call('leave_room');
+    if (!running) store.del('localStorage', LAST_KEY);
+    dropSession();
+});
+$('#btn-new').addEventListener('click', async () => { await call('leave_room'); store.del('localStorage', LAST_KEY); dropSession(); });
 
-        socket.on('auction_started', (data) => {
-            showScreen(auctionScreen);
-            updateAuctionUI(data);
+// ------------------------------------------------------------------ lobby
+const ORDER = { tiered: 'Top, mid, low (shuffled)', tiered_skill: 'Top, mid, low (by rating)', random: 'Random', skill_desc: 'Highest rated first', alphabetical: 'A to Z' };
+const SETTINGS = [
+    { key: 'auction_order', label: 'Order', opts: Object.keys(ORDER), show: v => ORDER[v] },
+    { key: 'team_purse', label: 'Purse', opts: [50, 90, 100, 120, 150], show: v => `₹${v} Cr` },
+    { key: 'squad_size', label: 'Squad size', opts: Array.from({ length: 21 }, (_, i) => i + 5), show: v => plural(v, 'player') },
+    { key: 'max_teams', label: 'Max teams', opts: Array.from({ length: 11 }, (_, i) => i + 2), show: v => `${v}` },
+    { key: 'bid_timer', label: 'Bid timer', opts: [10, 15, 20, 30], show: v => `${v} seconds` },
+];
 
-            // Show owner controls if user is owner
-            if (isOwner) {
-                auctionOwnerControls.classList.remove('hidden');
-            }
+function renderLobby() {
+    const owner = S.owner_id === me.teamId;
+    $('#lobby-code').textContent = S.code;
+    $('#lobby-count').textContent = `${S.teams.length} of ${S.settings.max_teams}`;
+    $('#lobby-teams').innerHTML = S.teams.map((t, i) => `
+        <li><span class="no">${String(i + 1).padStart(2, '0')}</span>
+            <span><span class="tn">${esc(t.team)}</span><br><span class="tag">${esc(t.name)}${t.is_owner ? ' &middot; auctioneer' : ''}${t.id === me.teamId ? ' &middot; you' : ''}</span></span>
+            <span class="st ${t.connected ? 'green' : 'faint'}">${t.connected ? 'here' : 'away'}</span></li>`).join('')
+        + (S.teams.length < 2 ? `<li><span class="no"></span><span class="faint">Waiting for others. Send them the code.</span></li>` : '');
 
-            // Initialize charts
-            setTimeout(() => {
-                initializeAuctionTrendsChart();
-                initializeTeamCompositionChart();
-            }, 100);
+    const form = $('#settings-form');
+    if (!form.contains(document.activeElement)) {
+        form.innerHTML = SETTINGS.map(d => owner
+            ? `<label class="field" style="margin-bottom:12px"><span class="caps">${d.label}</span><select class="input" data-setting="${d.key}">
+                ${d.opts.map(o => `<option value="${o}" ${String(S.settings[d.key]) === String(o) ? 'selected' : ''}>${esc(d.show(o))}</option>`).join('')}</select></label>`
+            : `<div class="kv"><span class="muted">${d.label}</span><b>${esc(d.show(S.settings[d.key]))}</b></div>`).join('');
+        $$('select', form).forEach(sel => sel.addEventListener('change', async () => {
+            const k = sel.dataset.setting;
+            const res = await call('update_settings', { [k]: k === 'auction_order' ? sel.value : Number(sel.value) });
+            if (!res.ok) toast(res.error, 'error');
+            sel.blur();
+        }));
+    }
+    $('#settings-note').textContent = owner ? 'you set these' : 'set by the auctioneer';
+    $('#pool-size').textContent = plural(S.pool_size, 'player');
+    const tiered = S.settings.auction_order.startsWith('tiered');
+    $('#pool-summary').innerHTML = Object.entries(S.tier_counts).map(([name, n]) =>
+        `<div class="kv"><span>${esc(name)}</span><b class="mono">${n}</b></div>`).join('')
+        + `<p class="hint">${tiered ? 'Top is rated 85+, mid is 72 to 84, low is under 72.' : 'This order runs everyone as one batch.'}</p>`;
+    $('#lobby-start').innerHTML = owner
+        ? `<button id="btn-start" class="btn wide">Start the auction</button><p class="hint" style="text-align:center">${S.teams.length < 2 ? 'You can start alone to try it out.' : plural(S.teams.length, 'team') + ' in the room'}</p>`
+        : `<p class="muted" style="border:1px dashed var(--ink);padding:14px;text-align:center;margin:0">Waiting for the auctioneer to start...</p>`;
+    const b = $('#btn-start');
+    if (b) b.onclick = async () => { busy(b, true, 'Starting...'); const r = await call('start_auction'); if (!r.ok) { busy(b, false); toast(r.error, 'error'); } };
+}
 
-            // Add save button listeners for auction screen
-            addAuctionSaveListeners();
+// ------------------------------------------------------------------ auction
+const tIndex = (id) => Math.max(0, S.teams.findIndex(t => t.id === id));
+const tColor = (id) => TEAM_COLORS[tIndex(id) % TEAM_COLORS.length];
 
-            // Request initial team compositions
-            socket.emit('get_team_compositions', { room_code: roomCode });
-        });
+function renderAuction(prev) {
+    const mine = S.teams.find(t => t.id === me.teamId);
+    $('#n-squad').textContent = mine.squad.length;
+    $('#n-teams').textContent = S.teams.length;
+    renderLot(prev);
+    renderGavel();
+    renderStandings();
+    renderUpNext();
+    renderMySquad();
+    renderAllTeams();
+    renderBatches();
+    renderLog();
+    renderBidBar();
+    tick();
+}
 
-        socket.on('bid_updated', (data) => {
-            updateAuctionUI(data);
-            // Reset timer display to 15 when bid is updated
-            timerDisplay.textContent = 15;
-            // Request updated team compositions
-            socket.emit('get_team_compositions', { room_code: roomCode });
-        });
+function batchLine() {
+    const b = S.batches[S.batch_idx];
+    return b ? `${esc(b.name)} &middot; ${b.total - b.remaining} of ${b.total}` : '';
+}
 
-        socket.on('timer_tick', (data) => {
-            timerDisplay.textContent = data.time;
-        });
+function renderLot(prev) {
+    const el = $('#lot');
+    if (S.phase === 'sold_pause' && S.last_result) {
+        phaseClock = { endsAt: performance.now() + (S.phase_remaining_ms || 0) };
+        const r = S.last_result;
+        if (prev && prev.phase === 'sold_pause' && prev.last_result?.player.pid === r.player.pid) return;
+        el.innerHTML = `
+            <div class="lot-head"><span class="caps">Lot ${S.lot_number}</span><span class="caps faint" style="margin-left:auto">${batchLine()}</span></div>
+            <div class="stamp-wrap">
+                <div class="caps" style="margin-bottom:22px">${esc(r.player.name)}</div>
+                <div class="stamp ${r.sold ? 'sold' : 'unsold'}">${r.sold ? 'SOLD' : 'UNSOLD'}</div>
+                <div class="stamp-sub">${r.sold
+                    ? `<span class="mono">${fmt(r.price)}</span>to <b>${esc(r.winner)}</b>${r.winner_id === me.teamId ? ' (you)' : ''}`
+                    : '<span class="muted">No bids. Back to the unsold pool.</span>'}</div>
+            </div>`;
+        return;
+    }
+    if (S.phase === 'batch_break') {
+        phaseClock = { endsAt: performance.now() + (S.phase_remaining_ms || 0) };
+        el.innerHTML = `
+            <div class="lot-head"><span class="caps">Interval</span></div>
+            <div class="interval">
+                <div class="caps">Next batch</div>
+                <h3>${esc(S.pending_batch)}</h3>
+                <div class="muted">starts in <b class="mono" data-phase-clock>-</b> seconds</div>
+            </div>`;
+        return;
+    }
+    const lot = S.lot;
+    if (!lot) { el.innerHTML = '<div class="empty">Waiting for the next lot...</div>'; return; }
+    const p = lot.player;
+    const fresh = !prev || prev.lot?.lot_id !== lot.lot_id;
+    const bumped = !fresh && prev.lot?.bid !== lot.bid;
+    if (fresh || bumped || !lotClock || prev?.paused !== S.paused) {
+        lotClock = { endsAt: performance.now() + lot.remaining_ms, total: S.settings.bid_timer * 1000, paused: S.paused, frozen: lot.remaining_ms };
+    }
+    const mineLeads = lot.bidder_id === me.teamId;
+    el.innerHTML = `
+        <div class="lot-head"><span class="caps">Lot ${lot.lot_id}</span>${S.paused ? '<span class="caps red">paused</span>' : ''}<span class="caps faint" style="margin-left:auto">${batchLine()}</span></div>
+        <div class="lot-body">
+            <h2 class="lot-name">${esc(p.name)}</h2>
+            <div class="lot-meta">${role(p.role)}<span>${esc(p.role)}</span><span>${esc(p.nationality)}</span><span>Rating <b class="mono">${p.overall}</b></span><span>Base <b class="mono">${fmt(p.base)}</b></span></div>
+        </div>
+        <div class="board ${mineLeads ? 'mine' : ''} ${bumped ? 'flash' : ''}">
+            <div><div class="caps">${lot.bid === null ? 'Opens at' : 'Current bid'}</div><div class="big">${fmt(lot.bid ?? p.base)}</div></div>
+            <div><div class="caps">${lot.bidder ? 'Held by' : 'No bids yet'}</div><div class="who">${lot.bidder ? esc(lot.bidder) + (mineLeads ? ' <span class="caps green">you</span>' : '') : '<span class="faint">&mdash;</span>'}</div></div>
+        </div>
+        <div class="clock" id="clock"><div class="track"><div class="fill" id="clock-fill"></div></div><div class="secs" id="clock-secs">-</div></div>
+        ${lot.history.length ? `<div class="history"><div class="caps">Bids</div><ol>${[...lot.history].reverse().map(h =>
+            `<li><span class="amt">${fmt(h.amount)}</span><span>${esc(h.team)}${h.team_id === me.teamId ? ' (you)' : ''}</span></li>`).join('')}</ol></div>` : ''}`;
+}
 
-        socket.on('times_up', () => {
-            if(isOwner) {
-                socket.emit('sell_player', { room_code: roomCode });
-            }
-        });
-        
-        socket.on('player_sold', (data) => {
-            // Add to auction data for charts
-            auctionData.soldPlayers.push(data);
+function renderGavel() {
+    const box = $('#gavel');
+    if (S.owner_id !== me.teamId) { box.innerHTML = ''; return; }
+    const bidding = S.phase === 'bidding';
+    const hasBid = bidding && S.lot && S.lot.bidder_id;
+    const b = S.batches[S.batch_idx];
+    const brk = S.phase === 'batch_break';
+    box.innerHTML = `<div class="gavel"><span class="caps">Auctioneer</span>
+        ${brk ? `<button class="btn sm" data-act="next_batch">Start ${esc(S.pending_batch)} now</button>
+                 <button class="btn ghost sm" data-act="skip_batch" data-confirm="Skip the whole ${esc(S.pending_batch)} batch?">Skip this batch</button>`
+              : `${S.paused ? '<button class="btn sm" data-act="resume">Resume</button>' : `<button class="btn ghost sm" data-act="pause" ${bidding ? '' : 'disabled'}>Pause</button>`}
+                 <button class="btn ghost sm" data-act="sell_now" ${hasBid ? '' : 'disabled'}>Sell now</button>
+                 <button class="btn ghost sm" data-act="skip_player" ${bidding ? '' : 'disabled'} ${hasBid ? 'data-confirm="Skip this player and throw away the bids?"' : ''}>Skip player</button>
+                 <button class="btn ghost sm" data-act="skip_batch" data-confirm="Skip the rest of ${esc(b?.name || 'this batch')}? They go to the unsold pool.">Skip batch</button>`}
+        <button class="btn danger sm push" data-act="end" data-confirm="End the auction now? Squads become final.">End auction</button></div>`;
+    $$('[data-act]', box).forEach(btn => btn.onclick = async () => {
+        if (btn.dataset.confirm && !confirm(btn.dataset.confirm)) return;
+        btn.disabled = true;
+        const res = await call('owner_action', { action: btn.dataset.act });
+        if (!res.ok) { toast(res.error, 'error'); btn.disabled = false; }
+    });
+}
 
-            // Only add to sold players list if actually sold (not unsold)
-            if (data.winner) {
-                const soldPlayerCard = `
-                    <div class="bg-dark-800 rounded-xl p-4 border border-dark-600 mb-3">
-                        <div class="flex items-center mb-2">
-                            <div class="w-8 h-8 bg-gradient-to-r from-green-500 to-emerald-600 rounded-lg flex items-center justify-center mr-3">
-                                <span class="text-white text-xs">✓</span>
-                            </div>
-                            <p class="font-bold text-white text-sm">${data.player.name}</p>
-                        </div>
-                        <div class="space-y-1">
-                            <p class="text-xs text-dark-300">Sold to: <span class="text-primary-400 font-semibold">${data.winner}</span></p>
-                            <p class="text-xs text-green-400 font-semibold">Price: ${formatCurrency(data.final_bid)}</p>
-                        </div>
-                    </div>`;
-                soldPlayersList.innerHTML += soldPlayerCard;
+function renderStandings() {
+    const lead = S.lot && S.lot.bidder_id;
+    $('#standings').innerHTML = `<thead><tr><th>Team</th><th class="num">Squad</th><th class="num">Spent</th><th class="num">Left</th></tr></thead><tbody>`
+        + S.teams.map(t => `<tr class="${t.id === me.teamId ? 'me' : ''} ${t.id === lead ? 'lead' : ''} ${t.connected ? '' : 'away'}">
+            <td><span style="color:${tColor(t.id)}">&#9632;</span> ${esc(t.team)}${t.is_owner ? ' <span class="faint">(A)</span>' : ''}${t.connected ? '' : ' <span class="faint">away</span>'}</td>
+            <td class="num">${t.squad.length}/${S.settings.squad_size}</td><td class="num">${fmt(t.spent)}</td><td class="num">${fmt(t.purse_left)}</td></tr>`).join('') + '</tbody>';
+}
 
-                // Auto-scroll to bottom
-                soldPlayersList.scrollTop = soldPlayersList.scrollHeight;
+function upnextRows() {
+    if (!S.upcoming.length) return '<tbody><tr><td class="empty" colspan="4">Last player of this batch</td></tr></tbody>';
+    return `<thead><tr><th>Player</th><th></th><th class="num">Rating</th><th class="num">Base</th></tr></thead><tbody>` + S.upcoming.map(p =>
+        `<tr><td>${esc(p.name)}</td><td>${role(p.role)}</td><td class="num">${p.overall}</td><td class="num">${fmt(p.base)}</td></tr>`).join('') + '</tbody>';
+}
+function renderUpNext() {
+    const rows = upnextRows();
+    $('#upnext').innerHTML = rows;
+    $('#upnext-2').innerHTML = rows;
+    $('#next-batch').textContent = S.phase === 'batch_break' ? S.pending_batch : (S.batches[S.batch_idx]?.name || '');
+}
 
-                // Update auction trends chart
-                updateAuctionTrendsChart();
-            }
+function roleBar(t) {
+    const n = t.squad.length;
+    const segs = n ? ROLES.filter(r => t.roles[r]).map(r =>
+        `<i style="width:${t.roles[r] / n * 100}%;background:${ROLE_COLOR[r]}" title="${r}: ${t.roles[r]}">${t.roles[r]}</i>`).join('') : '';
+    return `<div class="rolebar">${segs}</div><div class="legend">${ROLES.map(r => `<span style="--c:${ROLE_COLOR[r]}">${r} <b class="mono">${t.roles[r] || 0}</b></span>`).join('')}</div>`;
+}
+function squadTable(t, emptyText) {
+    const rows = [...t.squad].sort((a, b) => b.price - a.price);
+    if (!rows.length) return `<div class="empty">${emptyText}</div>`;
+    return `<table class="t"><thead><tr><th>Player</th><th></th><th class="num">Rating</th><th class="num">Price</th></tr></thead><tbody>${rows.map(p =>
+        `<tr><td>${esc(p.name)} <span class="faint" style="font-size:12px">${esc(p.nationality)}</span></td><td>${role(p.role)}</td><td class="num">${p.overall}</td><td class="num">${fmt(p.price)}</td></tr>`).join('')}</tbody></table>`;
+}
 
-            playerDetailsDiv.classList.add('hidden');
-            bouncingLoader.classList.remove('hidden');
+function renderMySquad() {
+    const t = S.teams.find(x => x.id === me.teamId);
+    $('#my-squad').innerHTML = `
+        <div class="h-section"><h2>${esc(t.team)}</h2><span class="aside">${esc(t.name)}</span></div>
+        <div class="figures">
+            <div><div class="caps">Players</div><div class="v">${t.squad.length}<span class="faint" style="font-size:15px">/${S.settings.squad_size}</span></div></div>
+            <div><div class="caps">Spent</div><div class="v">${fmt(t.spent)}</div></div>
+            <div><div class="caps">Purse left</div><div class="v green">${fmt(t.purse_left)}</div></div>
+            <div><div class="caps">Slots left</div><div class="v">${t.slots_left}</div></div>
+        </div>
+        ${roleBar(t)}
+        ${squadTable(t, 'Nothing here yet. Win a bid :)')}`;
+}
 
-            // Request updated team compositions
-            socket.emit('get_team_compositions', { room_code: roomCode });
-        });
+const openTeams = new Set();
+function renderAllTeams() {
+    const box = $('#all-teams');
+    $$('details', box).forEach(d => d.open ? openTeams.add(d.dataset.id) : openTeams.delete(d.dataset.id));
+    box.innerHTML = S.teams.map(t => `
+        <details class="team" data-id="${t.id}" ${openTeams.has(t.id) ? 'open' : ''}>
+            <summary><span class="tn">${esc(t.team)}${t.id === me.teamId ? ' <span class="caps green">you</span>' : ''}</span>
+                <span class="mono">${t.squad.length}/${S.settings.squad_size}</span><span class="mono hide-sm">${fmt(t.spent)} spent</span><span class="mono hide-sm">${fmt(t.purse_left)} left</span></summary>
+            <div>${roleBar(t)}${squadTable(t, 'No players yet')}</div>
+        </details>`).join('');
+}
 
-        socket.on('next_player', (data) => {
-            timerDisplay.textContent = 15;
-            updateAuctionUI(data);
-            // Request updated team compositions for the new player
-            socket.emit('get_team_compositions', { room_code: roomCode });
-        });
+function renderBatches() {
+    $('#sold-unsold').textContent = `${S.sold_count} sold, ${S.unsold_count} unsold`;
+    $('#batches').innerHTML = S.batches.map(b => {
+        const done = b.total - b.remaining;
+        return `<li class="${b.status}"><span class="bn">${esc(b.name)}</span><span class="mono" style="text-align:right">${done}/${b.total}</span>
+            <div class="bar"><i style="width:${b.total ? done / b.total * 100 : 0}%"></i></div></li>`;
+    }).join('');
+}
 
-        socket.on('auction_complete', (data) => {
-            showScreen(resultsScreen);
+function renderLog() {
+    const hms = (t) => new Date(t * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    $('#log').innerHTML = [...S.log].reverse().map(e => `<li><time>${hms(e.t)}</time><span class="k-${e.kind}">${esc(e.text)}</span></li>`).join('');
+}
 
-            // Display auction statistics
-            if (data.statistics) {
-                const stats = data.statistics;
+// ---- bid bar: pinned to the bottom, visible on every tab
+function blockReason(mine) {
+    const lot = S.lot;
+    if (S.phase !== 'bidding' || !lot) return 'Bidding is closed';
+    if (S.paused) return 'Paused by the auctioneer';
+    if (lot.bidder_id === me.teamId) return 'You hold the bid';
+    if (mine.slots_left <= 0) return 'Your squad is full';
+    if (lot.next_bids.every(a => a > mine.purse_left)) return `Not enough purse (${fmt(mine.purse_left)})`;
+    return '';
+}
+function renderBidBar() {
+    $('#bidbar').hidden = false;
+    const inner = $('#bidbar-inner');
+    const mine = S.teams.find(t => t.id === me.teamId);
+    if (S.phase !== 'bidding' || !S.lot) {
+        const r = S.last_result;
+        const txt = S.phase === 'batch_break' ? `Interval. ${esc(S.pending_batch)} next.`
+            : r ? (r.sold ? `${esc(r.player.name)} sold to ${esc(r.winner)}, ${fmt(r.price)}` : `${esc(r.player.name)} unsold`) : '';
+        inner.innerHTML = `<div class="bb-info"><div class="bb-name">${txt}</div><div class="bb-line">You have <span class="mono">${fmt(mine.purse_left)}</span> and ${plural(mine.slots_left, 'slot')} left</div></div>`;
+        return;
+    }
+    const lot = S.lot;
+    const reason = blockReason(mine);
+    const btns = lot.next_bids.map((amt, i) => {
+        const ok = !reason && amt <= mine.purse_left;
+        const label = lot.bid === null ? 'open at base' : `+${fmt(S.increments[i]).replace('₹', '')}`;
+        return `<button class="bidbtn ${i === 0 ? 'primary' : ''}" data-bid="${amt}" ${ok ? '' : 'disabled'}><b>${fmt(amt)}</b><small>${label} &middot; key ${i + 1}</small></button>`;
+    }).join('');
+    inner.innerHTML = `
+        <div class="bb-info">
+            <div class="bb-name">${esc(lot.player.name)}</div>
+            <div class="bb-line">${lot.bidder ? `<span class="mono">${fmt(lot.bid)}</span> ${esc(lot.bidder)}` : `opens at <span class="mono">${fmt(lot.player.base)}</span>`} &middot; you have <span class="mono">${fmt(mine.purse_left)}</span></div>
+            ${reason ? `<div class="bb-note">${esc(reason)}</div>` : ''}
+        </div>
+        <div class="bb-secs" id="bb-secs">-</div>
+        <div class="bb-btns">${btns}</div>`;
+    $$('[data-bid]', inner).forEach(b => b.onclick = () => bid(Number(b.dataset.bid)));
+}
 
-                if (stats.most_expensive) {
-                    expensivePlayerName.textContent = stats.most_expensive.player.name;
-                    expensivePlayerPrice.textContent = formatCurrency(stats.most_expensive.final_bid);
-                    expensivePlayerBuyer.textContent = `Bought by: ${stats.most_expensive.winner}`;
-                } else {
-                    expensivePlayerName.textContent = 'No players sold';
-                    expensivePlayerPrice.textContent = '-';
-                    expensivePlayerBuyer.textContent = '-';
-                }
+let inFlight = false;
+async function bid(amount) {
+    if (inFlight || !S?.lot) return;
+    inFlight = true;
+    $$('[data-bid]').forEach(b => b.disabled = true);
+    const res = await call('place_bid', { lot_id: S.lot.lot_id, amount });
+    inFlight = false;
+    if (!res.ok) { toast(res.error, 'error', 2400); if (S && screen === 'auction') renderBidBar(); }
+}
+document.addEventListener('keydown', (e) => {
+    if (screen !== 'auction' || e.target.closest('input,select,textarea') || e.metaKey || e.ctrlKey || e.altKey) return;
+    if (e.key === '1' || e.key === '2') {
+        const b = $$('#bidbar [data-bid]')[Number(e.key) - 1];
+        if (b && !b.disabled) { e.preventDefault(); b.click(); }
+    }
+});
 
-                averagePrice.textContent = formatCurrency(stats.average_price);
-                totalPlayersSold.textContent = stats.total_players_sold;
-            }
+// ---- clocks count down locally from the server's remaining_ms
+function tick() {
+    const now = performance.now();
+    if (screen === 'auction' && S && S.phase === 'bidding' && lotClock) {
+        const remain = lotClock.paused ? lotClock.frozen : Math.max(0, lotClock.endsAt - now);
+        const secs = Math.ceil(remain / 1000);
+        const hot = secs <= 5 && !lotClock.paused;
+        const fill = $('#clock-fill'); if (fill) fill.style.width = `${Math.min(100, remain / lotClock.total * 100)}%`;
+        const c = $('#clock'); if (c) c.classList.toggle('hot', hot);
+        const cs = $('#clock-secs'); if (cs) cs.textContent = secs;
+        const bs = $('#bb-secs'); if (bs) { bs.textContent = secs; bs.classList.toggle('hot', hot); }
+    }
+    const pc = $('[data-phase-clock]');
+    if (pc && phaseClock) pc.textContent = Math.ceil(Math.max(0, phaseClock.endsAt - now) / 1000);
+}
+(function loop() { tick(); requestAnimationFrame(loop); })();
 
-            const teams = {};
-            data.sold_players.forEach(p => {
-                if (!p.winner) return;
-                if (!teams[p.winner]) {
-                    teams[p.winner] = [];
-                }
-                teams[p.winner].push(p);
-            });
+// ------------------------------------------------------------------ results
+const charts = {};
+function destroyCharts() { Object.keys(charts).forEach(k => { charts[k].destroy(); delete charts[k]; }); }
+if (window.Chart) {
+    Chart.defaults.color = '#57534a';
+    Chart.defaults.font.family = "'IBM Plex Sans', system-ui, sans-serif";
+    Chart.defaults.borderColor = '#cfc6b1';
+}
 
-            // Initialize results charts
-            setTimeout(() => {
-                initializeResultsCharts(teams, data.sold_players);
-            }, 100);
+function renderResults(prev) {
+    const st = S.stats || {};
+    const fig = (label, value, sub) => `<div><div class="caps">${label}</div><div class="v">${value}</div><div class="faint" style="font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${sub || '&nbsp;'}</div></div>`;
+    $('#res-figures').innerHTML =
+        fig('Top buy', st.most_expensive ? fmt(st.most_expensive.price) : '&mdash;', st.most_expensive ? `${esc(st.most_expensive.name)}, ${esc(st.most_expensive.team)}` : 'nobody bought anyone :(') +
+        fig('Players sold', st.total_sold ?? 0, `${S.unsold_count} unsold`) +
+        fig('Average price', fmt(st.average_price || 0)) +
+        fig('Total spent', fmt(st.total_spent || 0), plural(S.teams.length, 'team'));
 
-            teamsDisplay.innerHTML = '';
-            for (const teamOwner in teams) {
-                let playersHtml = '';
-                let totalSpent = 0;
+    $('#res-teams').innerHTML = S.teams.map(t => `
+        <div>
+            <div class="h-section"><h2><span style="color:${tColor(t.id)}">&#9632;</span> ${esc(t.team)}</h2><span class="aside mono">${t.squad.length} &middot; ${fmt(t.spent)} &middot; ${fmt(t.purse_left)} left</span></div>
+            ${roleBar(t)}${squadTable(t, 'Bought nobody')}
+        </div>`).join('');
 
-                teams[teamOwner].forEach(p => {
-                    totalSpent += p.final_bid;
-                    playersHtml += `
-                        <div class="flex justify-between items-center py-2 border-b border-dark-600 last:border-b-0">
-                            <div>
-                                <span class="text-white font-medium">${p.player.name}</span>
-                                <span class="text-xs text-dark-300 ml-2">${p.player.role}</span>
-                            </div>
-                            <span class="text-green-400 font-semibold">${formatCurrency(p.final_bid)}</span>
-                        </div>`;
-                });
+    const unsold = S.unsold || [];
+    const u = $('#res-unsold');
+    u.hidden = !unsold.length;
+    $('.tn', u).textContent = `Unsold (${unsold.length})`;
+    $('table', u).innerHTML = `<thead><tr><th>Player</th><th></th><th class="num">Rating</th><th class="num">Base</th></tr></thead><tbody>${unsold.map(p =>
+        `<tr><td>${esc(p.name)}</td><td>${role(p.role)}</td><td class="num">${p.overall}</td><td class="num">${fmt(p.base)}</td></tr>`).join('')}</tbody>`;
 
-                const teamCard = `
-                    <div class="glass-effect rounded-2xl p-6 border border-dark-600 card-hover">
-                        <div class="flex items-center mb-6">
-                            <div class="w-12 h-12 bg-gradient-to-r from-primary-500 to-primary-700 rounded-xl flex items-center justify-center mr-4">
-                                <span class="text-white font-bold">${teamOwner.charAt(0).toUpperCase()}</span>
-                            </div>
-                            <div>
-                                <h3 class="text-xl font-bold text-white">${teamOwner}</h3>
-                                <p class="text-sm text-dark-300">${teams[teamOwner].length} players • ${formatCurrency(totalSpent)} spent</p>
-                            </div>
-                        </div>
-                        <div class="space-y-1 max-h-64 overflow-y-auto">
-                            ${playersHtml}
-                        </div>
-                    </div>`;
-                teamsDisplay.innerHTML += teamCard;
-            }
+    if (!window.Chart || (prev && prev.phase === 'finished' && charts.spend)) return;
+    destroyCharts();
+    const labels = S.teams.map(t => t.team);
+    const opts = (ticks) => ({
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, boxHeight: 10 } } },
+        scales: { x: { stacked: true, grid: { display: false } }, y: { stacked: true, beginAtZero: true, ticks } },
+    });
+    charts.spend = new Chart($('#chart-spend'), {
+        type: 'bar',
+        data: { labels, datasets: [
+            { label: 'Spent', data: S.teams.map(t => toCr(t.spent)), backgroundColor: S.teams.map(t => tColor(t.id)) },
+            { label: 'Left', data: S.teams.map(t => toCr(t.purse_left)), backgroundColor: '#e2dac8' },
+        ] },
+        options: opts({ callback: v => `${v} Cr` }),
+    });
+    charts.roles = new Chart($('#chart-roles'), {
+        type: 'bar',
+        data: { labels, datasets: ROLES.map(r => ({ label: r, data: S.teams.map(t => t.roles[r] || 0), backgroundColor: ROLE_COLOR[r] })) },
+        options: opts({ precision: 0 }),
+    });
+}
 
-            // Excel Export functionality for results screen
-            saveTeamsExcelBtn.addEventListener('click', () => {
-                // Create a workbook with multiple sheets
-                const wb = XLSX.utils.book_new();
+// ------------------------------------------------------------------ export
+function sheetName(name, used) {
+    const base = String(name).replace(/[\\/?*[\]:]/g, ' ').replace(/^'+|'+$/g, '').trim().slice(0, 28) || 'Team';
+    let c = base, n = 2;
+    while (used.has(c.toLowerCase())) c = `${base.slice(0, 26)} ${n++}`;
+    used.add(c.toLowerCase());
+    return c;
+}
+const salesInOrder = () => S.teams.flatMap(t => t.squad.map(p => ({ ...p, team: t.team }))).sort((a, b) => a.seq - b.seq);
 
-                // Create a summary sheet
-                const summaryData = [
-                    ['Team Name', 'Players Count', 'Total Spent (Cr)']
-                ];
+function exportExcel() {
+    if (typeof XLSX === 'undefined') return toast('The Excel library did not load. Try JSON.', 'error');
+    const wb = XLSX.utils.book_new();
+    const used = new Set(['summary', 'all sales', 'unsold']);
+    const add = (rows, name) => XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rows), name);
+    add([['Team', 'Manager', 'Players', 'Spent (Cr)', 'Purse left (Cr)', ...ROLES],
+        ...S.teams.map(t => [t.team, t.name, t.squad.length, toCr(t.spent), toCr(t.purse_left), ...ROLES.map(r => t.roles[r] || 0)])], 'Summary');
+    add([['#', 'Player', 'Role', 'Nationality', 'Rating', 'Team', 'Price (Cr)', 'Price'],
+        ...salesInOrder().map(s => [s.seq, s.name, s.role, s.nationality, s.overall, s.team, toCr(s.price), fmt(s.price)])], 'All sales');
+    S.teams.forEach(t => add([
+        ['Player', 'Role', 'Nationality', 'Rating', 'Price (Cr)', 'Price'],
+        ...[...t.squad].sort((a, b) => a.seq - b.seq).map(p => [p.name, p.role, p.nationality, p.overall, toCr(p.price), fmt(p.price)]),
+        [], ['Players', t.squad.length], ['Spent (Cr)', toCr(t.spent)], ['Purse left (Cr)', toCr(t.purse_left)],
+        ...ROLES.map(r => [r, t.roles[r] || 0]),
+    ], sheetName(t.team, used)));
+    if (S.unsold && S.unsold.length) add([['Player', 'Role', 'Nationality', 'Rating', 'Base (Cr)'], ...S.unsold.map(p => [p.name, p.role, p.nationality, p.overall, toCr(p.base)])], 'Unsold');
+    XLSX.writeFile(wb, `auction_${S.code}_${S.phase === 'finished' ? 'final' : 'live'}.xlsx`);
+}
+function exportJSON() {
+    const out = {
+        room: S.code, exported_at: new Date().toISOString(), status: S.phase, settings: S.settings,
+        teams: S.teams.map(t => ({ team: t.team, manager: t.name, spent_cr: toCr(t.spent), purse_left_cr: toCr(t.purse_left), roles: t.roles,
+            squad: t.squad.map(p => ({ name: p.name, role: p.role, nationality: p.nationality, overall: p.overall, price_cr: toCr(p.price), price: fmt(p.price) })) })),
+        unsold: (S.unsold || []).map(p => ({ name: p.name, role: p.role, overall: p.overall })),
+    };
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([JSON.stringify(out, null, 2)], { type: 'application/json' }));
+    a.download = `auction_${S.code}_${S.phase === 'finished' ? 'final' : 'live'}.json`;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+document.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-export]');
+    if (!b || !S) return;
+    try { b.dataset.export === 'xlsx' ? exportExcel() : exportJSON(); }
+    catch (err) { console.error(err); toast('Export failed: ' + err.message, 'error'); }
+});
 
-                for (const [teamName, teamPlayers] of Object.entries(teams)) {
-                    const totalSpent = teamPlayers.reduce((sum, p) => sum + p.final_bid, 0);
-                    summaryData.push([
-                        teamName,
-                        teamPlayers.length,
-                        (totalSpent / 10000000).toFixed(2)
-                    ]);
-                }
-
-                const summaryWs = XLSX.utils.aoa_to_sheet(summaryData);
-                XLSX.utils.book_append_sheet(wb, summaryWs, 'Summary');
-
-                // Create individual sheets for each team
-                for (const [teamName, teamPlayers] of Object.entries(teams)) {
-                    const teamSheetData = [
-                        ['Player Name', 'Role', 'Nationality', 'Overall Rating', 'Purchase Price (Cr)']
-                    ];
-
-                    teamPlayers.forEach(p => {
-                        teamSheetData.push([
-                            p.player.name,
-                            p.player.role,
-                            p.player.nationality,
-                            p.player.overall,
-                            (p.final_bid / 10000000).toFixed(2)
-                        ]);
-                    });
-
-                    // Add team summary at the bottom
-                    const totalSpent = teamPlayers.reduce((sum, p) => sum + p.final_bid, 0);
-                    teamSheetData.push([]);
-                    teamSheetData.push(['Team Summary']);
-                    teamSheetData.push(['Total Players', teamPlayers.length]);
-                    teamSheetData.push(['Total Spent (Cr)', (totalSpent / 10000000).toFixed(2)]);
-
-                    const teamWs = XLSX.utils.aoa_to_sheet(teamSheetData);
-                    // Clean team name for sheet name (remove special characters)
-                    const cleanTeamName = teamName.replace(/[^\w\s]/gi, '').substring(0, 31);
-                    XLSX.utils.book_append_sheet(wb, teamWs, cleanTeamName);
-                }
-
-                // Save the file
-                XLSX.writeFile(wb, 'cricket_auction_final_results.xlsx');
-            });
-        });
-
-        socket.on('error', (data) => {
-            alert('Error: ' + data.message);
-        });
-    </script>
+// ------------------------------------------------------------------ boot
+showScreen('setup');
+setConn('connecting');
+})();
+</script>
+{% endraw %}
 </body>
 </html>
