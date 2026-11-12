@@ -33,13 +33,13 @@ from flask_socketio import SocketIO, join_room, leave_room
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'cricket_auction_secret')
 
-# None lets Flask-SocketIO auto-detect (eventlet under the gunicorn eventlet
-# worker on Render). Set SOCKETIO_ASYNC_MODE=threading to run locally on
-# Python versions eventlet does not support.
+# Threading mode: works on any Python version and is served in production by
+# gunicorn's threaded worker (gunicorn -w 1 --threads 100 app:app), with
+# simple-websocket providing WebSocket support.
 socketio = SocketIO(
     app,
     cors_allowed_origins=os.environ.get('CORS_ORIGINS', '*'),
-    async_mode=os.environ.get('SOCKETIO_ASYNC_MODE') or None,
+    async_mode=os.environ.get('SOCKETIO_ASYNC_MODE') or 'threading',
     ping_interval=10,
     ping_timeout=20,
     max_http_buffer_size=3_000_000,
@@ -63,8 +63,14 @@ SETTING_CHOICES = {
     'max_teams': list(range(2, 13)),
     'bid_timer': list(range(5, 121)),                 # seconds, any value 5-120
     'break_seconds': list(range(5, 121)),             # pause between batches
-    'auction_order': ['tiered', 'tiered_skill', 'random', 'skill_desc', 'alphabetical'],
+    'auction_order': ['tiered', 'tiered_skill', 'roles', 'roles_skill', 'random', 'skill_desc', 'alphabetical'],
 }
+ROLE_BATCHES = [  # (role, batch name) in the order role batches run by default
+    ('Batsman', 'Batsmen'),
+    ('Wicket-keeper', 'Wicket-keepers'),
+    ('All-rounder', 'All-rounders'),
+    ('Bowler', 'Bowlers'),
+]
 DEFAULT_SETTINGS = {
     'team_purse': 100,
     'squad_size': 11,
@@ -237,7 +243,8 @@ class Room:
         self.paused_remaining = None
         self.phase_until = None
         self.last_result = None
-        self.unsold = []         # pids, in the order they went unsold
+        self.unsold = []         # pids that went under the hammer with no sale
+        self.skipped = []        # pids the auctioneer skipped (never re-auctioned)
         self.unsold_round_done = False
         self.sale_seq = 0
         self.log = deque(maxlen=40)
@@ -367,6 +374,17 @@ class Room:
                 else:
                     random.shuffle(group)
                 batches.append({'name': tier_name, 'queue': [p['pid'] for p in group]})
+        elif order.startswith('roles'):
+            batches = []
+            for role, batch_name in ROLE_BATCHES:
+                group = [p for p in players if p['role'] == role]
+                if not group:
+                    continue
+                if order == 'roles_skill':
+                    group.sort(key=lambda p: (-p['overall'], p['name']))
+                else:
+                    random.shuffle(group)
+                batches.append({'name': batch_name, 'queue': [p['pid'] for p in group]})
         else:
             if order == 'skill_desc':
                 players.sort(key=lambda p: (-p['overall'], p['name']))
@@ -532,10 +550,12 @@ class Room:
                 raise AuctionError('No player is up right now.')
             self._resolve_lot(now, force_unsold=True)
         elif action == 'skip_batch':
+            # Skipped players are set aside for good: they are not brought back
+            # in the unsold round (that round is for players nobody bid on).
             if self.phase == 'batch_break':
                 idx = self.pending_batch
                 batch = self.batches[idx]
-                self.unsold.extend(batch['queue'])
+                self.skipped.extend(batch['queue'])
                 batch['queue'] = []
                 self.batch_idx = idx
                 self._log(f"Skipped batch: {batch['name']}", 'batch')
@@ -543,9 +563,9 @@ class Room:
             else:
                 batch = self.batches[self.batch_idx]
                 if self.lot:
-                    self.unsold.append(self.lot['pid'])
+                    self.skipped.append(self.lot['pid'])
                     self.lot = None
-                self.unsold.extend(batch['queue'])
+                self.skipped.extend(batch['queue'])
                 batch['queue'] = []
                 self._log(f"Skipped rest of batch: {batch['name']}", 'batch')
                 self._end_of_batch(now)
@@ -553,10 +573,27 @@ class Room:
             if self.phase != 'batch_break':
                 raise AuctionError('Not between batches.')
             self._start_batch(self.pending_batch, now)
+        elif action == 'start_batch':
+            self._choose_batch(value, now)
         elif action == 'end':
             self._finish('Ended by the auctioneer')
         else:
             raise AuctionError('Unknown action.')
+
+    def _choose_batch(self, value, now):
+        """During an interval, start any batch that has not run yet instead of
+        the next one in line. The batches in between keep their order."""
+        if self.phase != 'batch_break':
+            raise AuctionError('You can only pick the next batch during an interval.')
+        try:
+            idx = int(value)
+        except (TypeError, ValueError):
+            raise AuctionError('Unknown batch.')
+        if not self.pending_batch <= idx < len(self.batches):
+            raise AuctionError('That batch has already run.')
+        batch = self.batches.pop(idx)
+        self.batches.insert(self.pending_batch, batch)
+        self._start_batch(self.pending_batch, now)
 
     def _set_timer(self, value, now):
         """Change the bid timer mid-auction. Takes effect on the next bid or player;
@@ -648,6 +685,9 @@ class Room:
         elif self.phase == 'batch_break' and self.pending_batch is not None:
             upcoming = [self.pool[pid] for pid in self.batches[self.pending_batch]['queue'][:5]]
 
+        role_counts = {role: 0 for role in ROLES}
+        for p in self.pool.values():
+            role_counts[p['role']] = role_counts.get(p['role'], 0) + 1
         tier_counts = {name: 0 for name, _ in TIERS}
         for p in self.pool.values():
             tier_counts[p['tier']] += 1
@@ -672,11 +712,14 @@ class Room:
             'pool_size': len(self.pool),
             'tier_counts': tier_counts,
             'unsold_count': len(self.unsold),
+            'skipped_count': len(self.skipped),
+            'role_counts': role_counts,
             'sold_count': self.sale_seq,
             'log': list(self.log)[-25:],
         }
         if self.phase == 'finished':
-            snap['unsold'] = [self.pool[pid] for pid in self.unsold]
+            snap['unsold'] = ([{**self.pool[pid], 'skipped': False} for pid in self.unsold] +
+                              [{**self.pool[pid], 'skipped': True} for pid in self.skipped])
             snap['stats'] = self._stats(teams)
         return snap
 

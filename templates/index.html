@@ -119,6 +119,32 @@ table.t tr:last-child td { border-bottom: 0; padding-bottom: 2px; }
 table.t .num { text-align: right; font-family: var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
 table.t tr.me td { font-weight: 600; }
 table.t tr.lead td { color: var(--red); }
+.board-teams { display: grid; gap: 10px; }
+.tb { background: #fff; border: 1px solid var(--rule); border-radius: 14px; padding: 12px 14px; cursor: pointer; transition: border-color .12s, background .3s; }
+.tb:hover { border-color: var(--ink-3); }
+.tb.me { border-color: var(--ink); }
+.tb.lead { background: #fbf1ea; border-color: #e2b6ae; }
+.tb.away { opacity: .6; }
+.tb-top { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.tb-name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tb-tag { font-size: 11px; font-weight: 600; border-radius: 999px; padding: 1px 8px; white-space: nowrap; }
+.tb-tag.lead { background: var(--red); color: #fff; }
+.tb-tag.you { background: var(--green-soft); color: var(--green); }
+.tb-count { margin-left: auto; font-family: var(--mono); font-size: 12.5px; color: var(--ink-2); white-space: nowrap; }
+.tb-money { display: flex; align-items: baseline; gap: 6px; margin: 8px 0 6px; }
+.tb-left { font-family: var(--mono); font-size: 20px; font-weight: 600; color: var(--green); line-height: 1.1; }
+.tb-left-l { font-size: 12px; color: var(--green); font-weight: 600; }
+.tb-spent { margin-left: auto; font-size: 12.5px; color: var(--ink-3); white-space: nowrap; }
+.tb-spent b { font-family: var(--mono); color: var(--ink-2); font-weight: 600; }
+.purse { height: 7px; background: #eadfd8; border-radius: 999px; overflow: hidden; }
+.purse > i { display: block; height: 100%; background: #4f8a5f; border-radius: 999px; }
+.tb-roles { display: flex; gap: 6px; margin-top: 10px; flex-wrap: wrap; }
+.rc { font-family: var(--mono); font-size: 11.5px; font-weight: 600; border-radius: 8px; padding: 2px 8px; background: var(--paper-2); color: var(--ink-2); }
+.rc.hot { background: var(--ink); color: var(--paper); }
+.board-key { display: flex; gap: 14px; font-size: 12px; color: var(--ink-3); margin: -6px 0 12px; flex-wrap: wrap; }
+.board-key span::before { content: ''; display: inline-block; width: 18px; height: 6px; border-radius: 999px; margin-right: 6px; vertical-align: 1px; background: var(--c); }
+.batch-pick { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; margin-top: 18px; }
+.batch-pick .pill { font-family: var(--sans); }
 table.t tr.away td { color: var(--ink-3); }
 .empty { padding: 28px 8px; text-align: center; color: var(--ink-3); font-size: 14px; }
 .hint { font-size: 12.5px; color: var(--ink-3); margin: 10px 0 0; }
@@ -441,7 +467,11 @@ details.plain[open] > summary .chev { transform: rotate(-135deg); }
                 <div id="gavel"></div>
             </div>
             <div class="stack">
-                <div class="card"><div class="card-title"><h2>Standings</h2></div><table class="t" id="standings"></table></div>
+                <div class="card">
+                    <div class="card-title"><h2>Teams</h2><span class="aside">tap a team for its squad</span></div>
+                    <div class="board-key"><span style="--c:#4f8a5f">purse left</span><span style="--c:#eadfd8">spent</span><span style="--c:var(--ink)">role of player up now</span></div>
+                    <div id="standings" class="board-teams"></div>
+                </div>
                 <div class="card"><div class="card-title"><h2>Up next</h2><span class="aside" id="next-batch"></span></div><table class="t" id="upnext"></table></div>
             </div>
         </div>
@@ -724,7 +754,12 @@ $('#hdr-leave').addEventListener('click', async () => {
 $('#btn-new').addEventListener('click', async () => { await call('leave_room'); store.del('localStorage', LAST_KEY); dropSession(); });
 
 // ------------------------------------------------------------------ lobby
-const ORDER = { tiered: 'Top, mid, low (shuffled)', tiered_skill: 'Top, mid, low (by rating)', random: 'Random', skill_desc: 'Highest rated first', alphabetical: 'A to Z' };
+const ORDER = {
+    tiered: 'By level: top, mid, low (shuffled)', tiered_skill: 'By level: top, mid, low (best first)',
+    roles: 'By role: bat, keep, all-round, bowl (shuffled)', roles_skill: 'By role: bat, keep, all-round, bowl (best first)',
+    random: 'One batch, random', skill_desc: 'One batch, highest rated first', alphabetical: 'One batch, A to Z',
+};
+const ROLE_PLURAL = { 'Batsman': 'Batsmen', 'Wicket-keeper': 'Wicket-keepers', 'All-rounder': 'All-rounders', 'Bowler': 'Bowlers' };
 const SETTINGS = [
     { key: 'auction_order', label: 'Order', opts: Object.keys(ORDER), show: v => ORDER[v] },
     { key: 'team_purse', label: 'Purse', opts: [50, 90, 100, 120, 150], show: v => `₹${v} Cr` },
@@ -791,10 +826,17 @@ function renderLobby(force = false) {
     }
     $('#settings-note').textContent = owner ? 'you set these' : 'set by the auctioneer';
     $('#pool-size').textContent = plural(S.pool_size, 'player');
-    const tiered = S.settings.auction_order.startsWith('tiered');
-    $('#pool-summary').innerHTML = Object.entries(S.tier_counts).map(([name, n]) =>
-        `<div class="kv"><span>${esc(name)}</span><b class="mono">${n}</b></div>`).join('')
-        + `<p class="hint">${tiered ? 'Top is rated 85+, mid is 72 to 84, low is under 72.' : 'This order runs everyone as one batch.'}</p>`;
+    const order = S.settings.auction_order;
+    const byRole = order.startsWith('roles'), byLevel = order.startsWith('tiered');
+    const groups = byRole
+        ? ['Batsman', 'Wicket-keeper', 'All-rounder', 'Bowler'].map(r => [ROLE_PLURAL[r], S.role_counts[r] || 0])
+        : Object.entries(S.tier_counts);
+    $('#pool-summary').innerHTML = (byRole || byLevel
+        ? groups.filter(([, n]) => n).map(([name, n]) => `<div class="kv"><span>${esc(name)}</span><b class="mono">${n}</b></div>`).join('')
+        : `<div class="kv"><span>All players</span><b class="mono">${S.pool_size}</b></div>`)
+        + `<p class="hint">${byRole ? 'Each role is its own batch. The auctioneer can skip a role once everyone has what they need, or pick which role goes next.'
+            : byLevel ? 'Top is rated 85+, mid is 72 to 84, low is under 72. The auctioneer can skip a batch.'
+            : 'This order runs everyone as one batch.'}</p>`;
     $('#lobby-start').innerHTML = owner
         ? `<button id="btn-start" class="btn wide">Start the auction</button><p class="hint" style="text-align:center">${S.teams.length < 2 ? 'You can start alone to try it out.' : plural(S.teams.length, 'team') + ' in the room'}</p>`
         : `<p class="waiting">Waiting for the auctioneer to start...</p>`;
@@ -852,6 +894,7 @@ function renderLot(prev) {
                 <div class="caps">Next batch</div>
                 <h3>${esc(S.pending_batch)}</h3>
                 <div class="muted">starts in <b class="mono" data-phase-clock>-</b> seconds</div>
+                ${upcomingBatches().length > 1 ? `<div class="hint" style="margin-top:18px">Still to come: ${upcomingBatches().map(([, b]) => `${esc(b.name)} (${b.total})`).join(', ')}</div>` : ''}
             </div>`;
         return;
     }
@@ -886,6 +929,10 @@ async function ownerAction(action, extra = {}, btn = null) {
     return res;
 }
 
+function upcomingBatches() {
+    return S.batches.map((b, i) => [i, b]).filter(([, b]) => b.status === 'upcoming');
+}
+
 function renderGavel() {
     const box = $('#gavel');
     if (S.owner_id !== me.teamId) { box.innerHTML = ''; return; }
@@ -896,17 +943,19 @@ function renderGavel() {
     const t = S.settings.bid_timer;
     box.innerHTML = `<div class="gavel"><span class="caps">Auctioneer</span>
         ${brk ? `<button class="btn sm" data-act="next_batch">Start ${esc(S.pending_batch)} now</button>
-                 <button class="btn ghost sm" data-act="skip_batch" data-confirm="Skip the whole ${esc(S.pending_batch)} batch?">Skip this batch</button>`
+                 ${upcomingBatches().slice(1).map(([i, ub]) => `<button class="btn ghost sm" data-pick="${i}">Start ${esc(ub.name)} instead</button>`).join('')}
+                 <button class="btn ghost sm" data-act="skip_batch" data-confirm="Skip all of ${esc(S.pending_batch)}? Skipped players are not auctioned again.">Skip ${esc(S.pending_batch)}</button>`
               : `${S.paused ? '<button class="btn sm" data-act="resume">Resume</button>' : `<button class="btn ghost sm" data-act="pause" ${bidding ? '' : 'disabled'}>Pause</button>`}
                  <button class="btn ghost sm" data-act="sell_now" ${hasBid ? '' : 'disabled'}>Sell now</button>
                  <button class="btn ghost sm" data-act="skip_player" ${bidding ? '' : 'disabled'} ${hasBid ? 'data-confirm="Skip this player and throw away the bids?"' : ''}>Skip player</button>
-                 <button class="btn ghost sm" data-act="skip_batch" data-confirm="Skip the rest of ${esc(b?.name || 'this batch')}? They go to the unsold pool.">Skip batch</button>`}
+                 <button class="btn ghost sm" data-act="skip_batch" data-confirm="Skip the rest of ${esc(b?.name || 'this batch')}? Skipped players are not auctioned again.">Skip rest of ${esc(b?.name || 'batch')}</button>`}
         <span class="stepper" title="Bid timer"><button data-timer="-5" ${t <= TIMER_MIN ? 'disabled' : ''} aria-label="Shorter timer">&minus;</button><b>${t}s</b><button data-timer="5" ${t >= TIMER_MAX ? 'disabled' : ''} aria-label="Longer timer">+</button></span>
         <button class="btn danger sm push" data-act="end" data-confirm="End the auction now? Squads become final.">End auction</button></div>`;
     $$('[data-act]', box).forEach(btn => btn.onclick = () => {
         if (btn.dataset.confirm && !confirm(btn.dataset.confirm)) return;
         ownerAction(btn.dataset.act, {}, btn);
     });
+    $$('[data-pick]', box).forEach(btn => btn.onclick = () => ownerAction('start_batch', { value: Number(btn.dataset.pick) }, btn));
     $$('[data-timer]', box).forEach(btn => btn.onclick = () => {
         const v = Math.min(TIMER_MAX, Math.max(TIMER_MIN, S.settings.bid_timer + Number(btn.dataset.timer)));
         ownerAction('set_timer', { value: v }, btn);
@@ -915,10 +964,37 @@ function renderGavel() {
 
 function renderStandings() {
     const lead = S.lot && S.lot.bidder_id;
-    $('#standings').innerHTML = `<thead><tr><th>Team</th><th class="num">Squad</th><th class="num">Spent</th><th class="num">Left</th></tr></thead><tbody>`
-        + S.teams.map(t => `<tr class="${t.id === me.teamId ? 'me' : ''} ${t.id === lead ? 'lead' : ''} ${t.connected ? '' : 'away'}">
-            <td><span class="dot" style="background:${tColor(t.id)}"></span>${esc(t.team)}${t.is_owner ? ' <span class="faint">(A)</span>' : ''}${t.connected ? '' : ' <span class="faint">away</span>'}</td>
-            <td class="num">${t.squad.length}/${S.settings.squad_size}</td><td class="num">${fmt(t.spent)}</td><td class="num">${fmt(t.purse_left)}</td></tr>`).join('') + '</tbody>';
+    const hotRole = S.lot ? S.lot.player.role : null;
+    const purse = S.settings.team_purse * CR;
+    const box = $('#standings');
+    box.innerHTML = S.teams.map(t => {
+        const leftPct = Math.max(0, Math.min(100, t.purse_left / purse * 100));
+        return `<div class="tb ${t.id === me.teamId ? 'me' : ''} ${t.id === lead ? 'lead' : ''} ${t.connected ? '' : 'away'}" data-team="${t.id}" title="Open ${esc(t.team)}'s squad">
+            <div class="tb-top">
+                <span class="dot" style="background:${tColor(t.id)};margin-right:2px"></span>
+                <span class="tb-name">${esc(t.team)}</span>
+                ${t.id === lead ? '<span class="tb-tag lead">leading</span>' : ''}
+                ${t.id === me.teamId ? '<span class="tb-tag you">you</span>' : ''}
+                ${t.is_owner ? '<span class="faint" style="font-size:12px" title="Auctioneer">(A)</span>' : ''}
+                ${t.connected ? '' : '<span class="faint" style="font-size:12px">away</span>'}
+                <span class="tb-count">${t.squad.length}/${S.settings.squad_size}</span>
+            </div>
+            <div class="tb-money">
+                <span class="tb-left">${fmt(t.purse_left)}</span><span class="tb-left-l">left</span>
+                <span class="tb-spent">spent <b>${fmt(t.spent)}</b></span>
+            </div>
+            <div class="purse" title="${fmt(t.purse_left)} left of ${fmt(purse)}"><i style="width:${leftPct}%"></i></div>
+            <div class="tb-roles">${ROLES.map(r => `<span class="rc ${r === hotRole ? 'hot' : ''}" title="${r}">${ROLE_SHORT[r]} ${t.roles[r] || 0}</span>`).join('')}</div>
+        </div>`;
+    }).join('');
+    $$('[data-team]', box).forEach(el => el.onclick = () => {
+        openTeams.add(el.dataset.team);
+        if (el.dataset.team === me.teamId) { setPane('squad'); return; }
+        renderAllTeams();
+        setPane('teams');
+        const d = $(`#all-teams details[data-id="${el.dataset.team}"]`);
+        if (d) d.scrollIntoView({ block: 'start' });
+    });
 }
 
 function upnextRows() {
@@ -976,7 +1052,7 @@ function renderAllTeams() {
 }
 
 function renderBatches() {
-    $('#sold-unsold').textContent = `${S.sold_count} sold, ${S.unsold_count} unsold`;
+    $('#sold-unsold').textContent = `${S.sold_count} sold, ${S.unsold_count} unsold` + (S.skipped_count ? `, ${S.skipped_count} skipped` : '');
     $('#batches').innerHTML = S.batches.map(b => {
         const done = b.total - b.remaining;
         return `<li class="${b.status}"><span class="bn">${esc(b.name)}</span><span class="mono">${done}/${b.total}</span>
@@ -1075,7 +1151,7 @@ function renderResults() {
     const purse = S.settings.team_purse * CR;
 
     $('#res-figures').innerHTML =
-        fig('Players sold', st.total_sold ?? 0, `${S.unsold_count} unsold`) +
+        fig('Players sold', st.total_sold ?? 0, `${S.unsold_count} unsold` + (S.skipped_count ? `, ${S.skipped_count} skipped` : '')) +
         fig('Total spent', fmt(st.total_spent || 0), `across ${plural(S.teams.length, 'team')}`) +
         fig('Average price', fmt(st.average_price || 0), 'per player sold') +
         fig('Top buy', st.most_expensive ? fmt(st.most_expensive.price) : '&mdash;',
@@ -1131,9 +1207,10 @@ function renderResults() {
     const unsold = S.unsold || [];
     const u = $('#res-unsold');
     u.hidden = !unsold.length;
-    $('.tn', u).textContent = `Unsold players (${unsold.length})`;
-    $('table', u).innerHTML = `<thead><tr><th>Player</th><th></th><th class="num">Rating</th><th class="num">Base</th></tr></thead><tbody>${[...unsold].sort((a, b) => b.overall - a.overall).map(p =>
-        `<tr><td>${esc(p.name)}</td><td>${role(p.role)}</td><td class="num">${p.overall}</td><td class="num">${fmt(p.base)}</td></tr>`).join('')}</tbody>`;
+    const skippedN = unsold.filter(p => p.skipped).length;
+    $('.tn', u).textContent = `Not bought (${unsold.length})` + (skippedN ? ` · ${skippedN} skipped` : '');
+    $('table', u).innerHTML = `<thead><tr><th>Player</th><th></th><th class="num">Rating</th><th class="num">Base</th><th class="num">Status</th></tr></thead><tbody>${[...unsold].sort((a, b) => b.overall - a.overall).map(p =>
+        `<tr><td>${esc(p.name)}</td><td>${role(p.role)}</td><td class="num">${p.overall}</td><td class="num">${fmt(p.base)}</td><td class="num faint">${p.skipped ? 'skipped' : 'no bids'}</td></tr>`).join('')}</tbody>`;
 }
 
 // ------------------------------------------------------------------ export
@@ -1161,7 +1238,7 @@ function exportExcel() {
         [], ['Players', t.squad.length], ['Spent (Cr)', toCr(t.spent)], ['Purse left (Cr)', toCr(t.purse_left)],
         ...ROLES.map(r => [r, t.roles[r] || 0]),
     ], sheetName(t.team, used)));
-    if (S.unsold && S.unsold.length) add([['Player', 'Role', 'Nationality', 'Rating', 'Base (Cr)'], ...S.unsold.map(p => [p.name, p.role, p.nationality, p.overall, toCr(p.base)])], 'Unsold');
+    if (S.unsold && S.unsold.length) add([['Player', 'Role', 'Nationality', 'Rating', 'Base (Cr)', 'Status'], ...S.unsold.map(p => [p.name, p.role, p.nationality, p.overall, toCr(p.base), p.skipped ? 'skipped' : 'no bids'])], 'Unsold');
     XLSX.writeFile(wb, `auction_${S.code}_${S.phase === 'finished' ? 'final' : 'live'}.xlsx`);
 }
 function exportJSON() {

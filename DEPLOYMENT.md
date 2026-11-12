@@ -35,7 +35,7 @@
 
 **Build & Deploy:**
 - **Build Command**: `pip install -r requirements.txt`
-- **Start Command**: `gunicorn --worker-class eventlet -w 1 --bind 0.0.0.0:$PORT app:app`
+- **Start Command**: `gunicorn -w 1 --threads 100 --timeout 120 --bind 0.0.0.0:$PORT app:app`
 
 **Environment Variables:**
 - `FLASK_ENV`: `production`
@@ -79,7 +79,7 @@
 1. **Create new app** from GitHub repository
 2. **Configure build settings**:
    - Build Command: `pip install -r requirements.txt`
-   - Run Command: `gunicorn --worker-class eventlet -w 1 --bind 0.0.0.0:$PORT app:app`
+   - Run Command: `gunicorn -w 1 --threads 100 --timeout 120 --bind 0.0.0.0:$PORT app:app`
 3. **Set environment variables** and deploy
 
 ## 🔐 Security Considerations
@@ -104,7 +104,7 @@ print(secrets.token_hex(32))
 - Ensure Python version compatibility
 
 **2. WebSocket Connection Issues**
-- Verify `eventlet` is installed
+- Verify `simple-websocket` is installed (it provides WebSocket support)
 - Check CORS settings in production
 
 **3. Static Files Not Loading**

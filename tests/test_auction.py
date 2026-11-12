@@ -224,23 +224,39 @@ def test_skip_batch_moves_to_break_then_next_batch():
     room.owner_action(a['id'], 'skip_batch', 1)
     assert room.phase == 'batch_break'
     assert room.batches[room.pending_batch]['name'] == 'Mid players'
-    assert len(room.unsold) == 3
+    assert len(room.skipped) == 3 and not room.unsold
     room.owner_action(a['id'], 'next_batch', 2)
     assert room.phase == 'bidding'
     assert room.pool[room.lot['pid']]['tier'] == 'Mid players'
 
 
-def test_skip_upcoming_batch_during_break_and_unsold_round():
+def test_skipped_players_do_not_come_back():
     room, (a, b) = room_with_teams(players=tiered_players())
     started(room, a)
     room.owner_action(a['id'], 'skip_batch', 1)   # skip Top -> break before Mid
     room.owner_action(a['id'], 'skip_batch', 2)   # skip Mid during break -> break before Low
     assert room.batches[room.pending_batch]['name'] == 'Low players'
-    room.owner_action(a['id'], 'skip_batch', 3)   # skip Low -> unsold round appended
-    assert room.batches[room.pending_batch]['name'] == 'Unsold round'
-    assert room.batches[room.pending_batch]['total'] == 9
-    room.owner_action(a['id'], 'skip_batch', 4)
+    room.owner_action(a['id'], 'skip_batch', 3)   # skip Low -> nothing left, no unsold round
     assert room.phase == 'finished'
+    assert len(room.skipped) == 9 and not room.unsold
+    snap = room.snapshot(3)
+    assert snap['skipped_count'] == 9 and all(p['skipped'] for p in snap['unsold'])
+
+
+def test_unsold_round_only_for_players_nobody_bid_on():
+    room, (a, b) = room_with_teams(players=tiered_players())
+    started(room, a)
+    now = 0
+    for _ in range(3):                              # Top batch: nobody bids
+        now += 100
+        room.tick(now)                              # lot times out -> unsold
+        now += 10
+        room.tick(now)                              # next lot / break
+    assert room.phase == 'batch_break' and len(room.unsold) == 3
+    room.owner_action(a['id'], 'skip_batch', now)   # skip Mid
+    room.owner_action(a['id'], 'skip_batch', now)   # skip Low -> unsold round of the 3 Top players
+    assert room.batches[room.pending_batch]['name'] == 'Unsold round'
+    assert room.batches[room.pending_batch]['total'] == 3
 
 
 def test_batch_break_auto_continues():
@@ -492,7 +508,7 @@ def test_random_auctions_keep_invariants(seed):
              'nationality': 'X'} for i in range(rng.randint(5, 40))]
     room = Room('FUZZ1', pool)
     room.settings.update(squad_size=rng.randint(5, 8), team_purse=rng.choice([50, 90, 100]),
-                         auction_order=rng.choice(['tiered', 'tiered_skill', 'random', 'skill_desc']))
+                         auction_order=rng.choice(['tiered', 'tiered_skill', 'roles', 'roles_skill', 'random', 'skill_desc']))
     teams = [room.add_team(f'u{i}', f'T{i}', f's{i}') for i in range(rng.randint(2, 6))]
     now = 0.0
     room.start(teams[0]['id'], now)
@@ -507,7 +523,7 @@ def test_random_auctions_keep_invariants(seed):
                 opts = room.next_valid_bids(t) or [rng.randint(0, 5000)]
                 room.bid(t['id'], room.lot['lot_id'] if rng.random() < .95 else -1, rng.choice(opts), now)
             elif roll < 0.74:
-                room.owner_action(teams[0]['id'], rng.choice(['pause', 'resume', 'sell_now', 'skip_player', 'skip_batch', 'next_batch']), now)
+                room.owner_action(teams[0]['id'], rng.choice(['pause', 'resume', 'sell_now', 'skip_player', 'skip_batch', 'next_batch', 'start_batch']), now, value=rng.randint(0, 4))
         except AuctionError:
             pass
         room.tick(now)
@@ -519,7 +535,7 @@ def test_random_auctions_keep_invariants(seed):
             assert len(t['squad']) <= room.settings['squad_size']
         queued = [pid for b in room.batches for pid in b['queue']]
         current = [room.lot['pid']] if room.lot else []
-        accounted = owned + room.unsold + queued + current
+        accounted = owned + room.unsold + room.skipped + queued + current
         assert len(accounted) == len(set(accounted)) == len(room.pool), 'player lost or duplicated'
     else:
         room.owner_action(teams[0]['id'], 'end', now)
@@ -569,3 +585,41 @@ def test_set_timer_over_socket(clients):
     r = owner.emit('owner_action', {'action': 'set_timer', 'value': 25}, callback=True)
     assert r['ok']
     assert last_state(owner)['settings']['bid_timer'] == 25
+
+
+# ---------------------------------------------------------------- role batches
+def role_players():
+    roles = ['Batsman', 'Bowler', 'All-rounder', 'Wicket-keeper']
+    return [{'name': f'{r[:3]}{i}', 'overall': 70 + i, 'role': r, 'nationality': 'X'} for r in roles for i in range(3)]
+
+
+def test_role_batches_order_and_skip():
+    room, (a, b) = room_with_teams(players=role_players(), auction_order='roles_skill')
+    started(room, a)
+    assert [bt['name'] for bt in room.batches] == ['Batsmen', 'Wicket-keepers', 'All-rounders', 'Bowlers']
+    assert room.pool[room.lot['pid']]['role'] == 'Batsman'
+    assert room.pool[room.lot['pid']]['overall'] == 72          # best first
+    room.owner_action(a['id'], 'skip_batch', 1)                  # done with batsmen
+    assert room.batches[room.pending_batch]['name'] == 'Wicket-keepers'
+
+
+def test_pick_any_remaining_batch_during_interval():
+    room, (a, b) = room_with_teams(players=role_players(), auction_order='roles')
+    started(room, a)
+    room.owner_action(a['id'], 'skip_batch', 1)                  # interval before Wicket-keepers
+    bowlers = [bt['name'] for bt in room.batches].index('Bowlers')
+    room.owner_action(a['id'], 'start_batch', 2, value=bowlers)
+    assert room.phase == 'bidding' and room.pool[room.lot['pid']]['role'] == 'Bowler'
+    assert [bt['name'] for bt in room.batches] == ['Batsmen', 'Bowlers', 'Wicket-keepers', 'All-rounders']
+    with pytest.raises(AuctionError):
+        room.owner_action(a['id'], 'start_batch', 3, value=3)      # not in an interval
+    room.owner_action(a['id'], 'skip_batch', 4)
+    with pytest.raises(AuctionError):
+        room.owner_action(a['id'], 'start_batch', 5, value=0)      # Batsmen already ran
+    with pytest.raises(AuctionError):
+        room.owner_action(b['id'], 'start_batch', 5, value=3)      # guests cannot
+
+
+def test_role_counts_in_snapshot():
+    room, _ = room_with_teams(players=role_players())
+    assert room.snapshot(0)['role_counts'] == {'Batsman': 3, 'Bowler': 3, 'All-rounder': 3, 'Wicket-keeper': 3}
