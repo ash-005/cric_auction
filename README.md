@@ -13,6 +13,7 @@ A real-time cricket player auction for a group of friends. One person opens a ro
 - **Bidding.** The first bid on a player is at the base price; after that it is +50L or +1 Cr. Every bid resets the clock. You cannot bid more than your purse, bid when your squad is full, or outbid yourself.
 - **Auctioneer controls.** Pause and resume, sell now, skip player, skip the rest of a batch, pick which batch runs next, change the bid timer, end auction.
 - **Floor view.** Every team's purse left (large), amount spent (small) and role make-up, with the role of the player up for bid highlighted. Tap a team to see its squad.
+- **Starting again.** On the results screen anyone can propose a restart. If two thirds of the people still in the room vote yes within a minute, everyone goes back to the lobby with the same room code and teams, empty squads and full purses, and the auctioneer can change the rules before starting.
 - **Export.** Excel (summary, all sales, one sheet per team, unsold) or JSON, both during and after the auction.
 
 ## Under the hood

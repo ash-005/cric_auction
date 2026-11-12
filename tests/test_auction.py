@@ -623,3 +623,84 @@ def test_pick_any_remaining_batch_during_interval():
 def test_role_counts_in_snapshot():
     room, _ = room_with_teams(players=role_players())
     assert room.snapshot(0)['role_counts'] == {'Batsman': 3, 'Bowler': 3, 'All-rounder': 3, 'Wicket-keeper': 3}
+
+
+# ---------------------------------------------------------------- restart vote
+def finished_room(n=3):
+    room, teams = room_with_teams(n)
+    room.start(teams[0]['id'], 0)
+    room.bid(teams[1]['id'], room.lot['lot_id'], room.pool[room.lot['pid']]['base'], 1)
+    room.owner_action(teams[0]['id'], 'sell_now', 2)
+    room.owner_action(teams[0]['id'], 'end', 3)
+    assert room.phase == 'finished' and teams[1]['squad']
+    return room, teams
+
+
+def test_restart_needs_two_thirds_then_resets_to_lobby():
+    room, (a, b, c) = finished_room(3)          # 3 teams -> need 2
+    room.propose_restart(c['id'], 10)            # proposer counts as yes
+    assert room.phase == 'finished' and room.snapshot(10)['vote']['need'] == 2
+    room.cast_vote(a['id'], True, 11)
+    assert room.phase == 'lobby' and room.vote is None
+    assert all(not t['squad'] for t in (a, b, c)) and room.purse_left(b) == 100 * 100
+    assert room.owner_id == a['id'] and not room.batches and not room.unsold
+    room.start(a['id'], 20)                      # a fresh auction can start
+    assert room.phase == 'bidding'
+
+
+def test_restart_vote_fails_on_no_votes_and_on_timeout():
+    room, (a, b, c) = finished_room(3)
+    room.propose_restart(a['id'], 10)
+    room.cast_vote(b['id'], False, 11)
+    room.cast_vote(c['id'], False, 12)          # 1 yes + 0 undecided < 2 -> fails
+    assert room.vote is None and room.phase == 'finished'
+    room.propose_restart(b['id'], 20)
+    assert room.tick(20 + server.RESTART_VOTE_SECONDS + 1)
+    assert room.vote is None and room.phase == 'finished'
+
+
+def test_restart_vote_counts_only_connected_teams():
+    room, teams = finished_room(4)               # 4 teams, 1 offline -> 3 voters, need 2
+    teams[3]['connected'] = False
+    room.propose_restart(teams[0]['id'], 10)
+    assert room.snapshot(10)['vote']['need'] == 2
+    room.cast_vote(teams[1]['id'], True, 11)
+    assert room.phase == 'lobby'
+
+
+def test_restart_vote_rules():
+    room, (a, b) = room_with_teams(2)
+    with pytest.raises(AuctionError):
+        room.propose_restart(a['id'], 0)         # not finished
+    room.start(a['id'], 0)
+    room.owner_action(a['id'], 'end', 1)
+    room.propose_restart(b['id'], 2)             # anyone may propose; 2 teams -> need 2
+    with pytest.raises(AuctionError):
+        room.propose_restart(a['id'], 3)         # one vote at a time
+    room.cast_vote(a['id'], False, 4)
+    assert room.vote is None                     # cannot reach 2 any more
+    assert room.snapshot(5)['vote'] is None
+
+
+def test_solo_room_restart_passes_immediately():
+    room, (a,) = room_with_teams(1)
+    room.start(a['id'], 0)
+    room.owner_action(a['id'], 'end', 1)
+    room.propose_restart(a['id'], 2)
+    assert room.phase == 'lobby'
+
+
+def test_restart_vote_over_socket(clients):
+    owner, guest, third = clients(), clients(), clients()
+    code = owner.emit('create_room', {'name': 'A', 'team': 'A'}, callback=True)['room_code']
+    guest.emit('join_room', {'room_code': code, 'name': 'b', 'team': 'B'}, callback=True)
+    third.emit('join_room', {'room_code': code, 'name': 'c', 'team': 'C'}, callback=True)
+    owner.emit('start_auction', {}, callback=True)
+    owner.emit('owner_action', {'action': 'end'}, callback=True)
+    assert not guest.emit('restart_vote', {'choice': 'maybe'}, callback=True)['ok']
+    assert guest.emit('restart_vote', {'choice': 'propose'}, callback=True)['ok']
+    assert last_state(third)['vote']['need'] == 2
+    assert third.emit('restart_vote', {'choice': 'yes'}, callback=True)['ok']
+    assert last_state(owner)['phase'] == 'lobby'
+    # joining is open again in the lobby
+    assert clients().emit('join_room', {'room_code': code, 'name': 'd', 'team': 'D'}, callback=True)['ok']

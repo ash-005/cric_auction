@@ -5,6 +5,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="default-pool" content="{{ default_pool }}">
 <title>Auction Room</title>
+<link rel="icon" href="/static/icon.svg" type="image/svg+xml">
+<link rel="icon" href="/static/favicon-32.png" sizes="32x32" type="image/png">
+<link rel="apple-touch-icon" href="/static/apple-touch-icon.png">
+<link rel="manifest" href="/static/site.webmanifest">
+<meta name="theme-color" content="#f2ede2">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700;9..144,900&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -55,7 +60,7 @@ button, input, select { font: inherit; color: inherit; }
 .top { position: sticky; top: 0; z-index: 20; background: rgba(242,237,226,.92); backdrop-filter: saturate(1.2) blur(8px); border-bottom: 1px solid var(--rule-2); }
 .top-row { display: flex; align-items: center; gap: 14px; height: 60px; }
 .mark { display: flex; align-items: center; gap: 10px; text-decoration: none; color: inherit; font-family: var(--serif); font-weight: 900; font-size: 20px; letter-spacing: -.01em; }
-.mark svg { width: 24px; height: 24px; }
+.mark img { width: 28px; height: 28px; display: block; }
 .code-btn { font-family: var(--mono); font-size: 13px; font-weight: 600; background: var(--sheet); border: 1px solid var(--rule-2); border-radius: 999px; padding: 4px 12px; cursor: pointer; letter-spacing: .1em; }
 .code-btn:hover { border-color: var(--ink); }
 .top-right { margin-left: auto; display: flex; align-items: center; gap: 16px; font-size: 13px; }
@@ -148,6 +153,25 @@ table.t tr.lead td { color: var(--red); }
 table.t tr.away td { color: var(--ink-3); }
 .empty { padding: 28px 8px; text-align: center; color: var(--ink-3); font-size: 14px; }
 .hint { font-size: 12.5px; color: var(--ink-3); margin: 10px 0 0; }
+.dialog { position: fixed; inset: 0; z-index: 60; background: rgba(28,27,24,.38); display: grid; place-items: center; padding: 20px; animation: fade .12s ease-out; }
+.dialog-box { width: min(440px, 100%); background: var(--sheet); border: 1px solid var(--rule-2); border-radius: 18px; padding: 24px; box-shadow: 0 30px 60px -20px rgba(0,0,0,.45); animation: rise .16s ease-out; }
+.dialog-box h3 { font-family: var(--serif); font-size: 23px; font-weight: 700; margin: 0 0 8px; letter-spacing: -.01em; }
+.dialog-box p { margin: 0; color: var(--ink-2); }
+.dialog-acts { display: flex; justify-content: flex-end; gap: 8px; margin-top: 22px; }
+.dialog-extra:not(:empty) { margin-top: 14px; }
+@keyframes fade { from { opacity: 0; } }
+.vote { border-radius: var(--r); padding: 20px 24px; margin-bottom: 24px; display: grid; grid-template-columns: 1fr auto; gap: 14px 24px; align-items: center; }
+.vote.idle { background: var(--sheet); border: 1px dashed var(--rule-2); }
+.vote.live { background: #fbf1ea; border: 1px solid #e2b6ae; box-shadow: var(--shadow); }
+.vote h3 { font-family: var(--serif); font-size: 21px; font-weight: 700; margin: 0 0 2px; }
+.vote .acts { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+.vote .meter { grid-column: 1 / -1; }
+.vote .bar { height: 10px; }
+.vote .bar > i { background: var(--red); }
+.voters { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 6px; }
+.voter { font-size: 12.5px; border-radius: 999px; padding: 3px 10px; background: #fff; border: 1px solid var(--rule); color: var(--ink-2); }
+.voter.yes { background: var(--green-soft); border-color: #c6d6bd; color: var(--green); font-weight: 600; }
+.voter.no { background: var(--paper-2); color: var(--ink-3); text-decoration: line-through; }
 .toasts { position: fixed; z-index: 50; left: 24px; bottom: 116px; display: flex; flex-direction: column; gap: 8px; width: min(380px, calc(100vw - 48px)); pointer-events: none; }
 .toast { background: var(--ink); color: var(--paper); padding: 11px 15px; font-size: 14px; border-radius: 12px; border-left: 4px solid var(--ink-3); animation: rise .18s ease-out; box-shadow: 0 10px 30px -10px rgba(0,0,0,.4); }
 .toast.error { border-left-color: #e0493e; }
@@ -349,6 +373,8 @@ details.plain[open] > summary .chev { transform: rotate(-135deg); }
     details.team > summary .hide-sm { display: none; }
     details.team > div { padding: 6px 16px 16px; }
     .toasts { left: 14px; bottom: 160px; }
+    .vote { grid-template-columns: 1fr; padding: 18px 16px; }
+    .vote .acts { justify-content: flex-start; }
     .team-card .nums .v { font-size: 14px; }
 }
 </style>
@@ -359,7 +385,7 @@ details.plain[open] > summary .chev { transform: rotate(-135deg); }
 <header class="top">
     <div class="wrap top-row">
         <a class="mark" href="#" onclick="return false">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="11" fill="#b3261e"/><path d="M7 3.6c2.7 4.8 2.7 12 0 16.8M17 3.6c-2.7 4.8-2.7 12 0 16.8" fill="none" stroke="#f2ede2" stroke-width="1.1" stroke-dasharray="1.6 1.4"/></svg>
+            <img src="/static/icon.svg" alt="" width="28" height="28">
             <span>Auction Room</span>
         </a>
         <button id="hdr-code" class="code-btn" title="Copy room code" hidden></button>
@@ -379,6 +405,18 @@ details.plain[open] > summary .chev { transform: rotate(-135deg); }
 </header>
 
 <div id="toasts" class="toasts"></div>
+
+<div id="dialog" class="dialog" hidden>
+    <div class="dialog-box" role="dialog" aria-modal="true" aria-labelledby="dlg-title">
+        <h3 id="dlg-title"></h3>
+        <p id="dlg-body"></p>
+        <div id="dlg-extra" class="dialog-extra"></div>
+        <div class="dialog-acts">
+            <button id="dlg-cancel" class="btn ghost" type="button">Cancel</button>
+            <button id="dlg-ok" class="btn" type="button">OK</button>
+        </div>
+    </div>
+</div>
 
 <main class="wrap">
 
@@ -499,10 +537,11 @@ details.plain[open] > summary .chev { transform: rotate(-135deg); }
         <div class="actions">
             <button class="btn" data-export="xlsx">Download Excel</button>
             <button class="btn ghost" data-export="json">JSON</button>
-            <button id="btn-new" class="btn ghost">New auction</button>
+            <button id="btn-new" class="btn ghost">Leave room</button>
         </div>
     </div>
     <div class="stack">
+        <div id="res-vote"></div>
         <div id="res-figures" class="figures"></div>
         <div class="card">
             <div class="card-title"><h2>Table</h2><span class="aside">ranked by average player rating</span></div>
@@ -567,9 +606,45 @@ function toast(msg, kind = 'info', ms = 3200) {
     if (narrow) ms = Math.min(ms, 2200);
     setTimeout(() => { el.style.transition = 'opacity .25s'; el.style.opacity = '0'; setTimeout(() => el.remove(), 260); }, ms);
 }
+/** In-page replacement for confirm(). Resolves true when the user confirms. */
+function ask({ title, body = '', ok = 'Confirm', cancel = 'Cancel', danger = false, extra = '' }) {
+    const dlg = $('#dialog'), okBtn = $('#dlg-ok'), cancelBtn = $('#dlg-cancel');
+    $('#dlg-title').textContent = title;
+    $('#dlg-body').textContent = body;
+    $('#dlg-extra').innerHTML = extra;
+    okBtn.textContent = ok;
+    okBtn.className = danger ? 'btn danger' : 'btn';
+    cancelBtn.textContent = cancel;
+    cancelBtn.hidden = !cancel;
+    dlg.hidden = false;
+    const back = document.activeElement;
+    setTimeout(() => ($('input', dlg) || okBtn).focus(), 0);
+    return new Promise((resolve) => {
+        const done = (v) => {
+            dlg.hidden = true;
+            okBtn.onclick = cancelBtn.onclick = dlg.onclick = null;
+            document.removeEventListener('keydown', onKey, true);
+            if (back && back.focus) back.focus();
+            resolve(v);
+        };
+        const onKey = (e) => {
+            if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); done(false); }
+            else if (e.key === 'Enter' && !e.target.closest('input')) { e.preventDefault(); e.stopPropagation(); done(true); }
+            else e.stopPropagation();
+        };
+        okBtn.onclick = () => done(true);
+        cancelBtn.onclick = () => done(false);
+        dlg.onclick = (e) => { if (e.target === dlg) done(false); };
+        document.addEventListener('keydown', onKey, true);
+    });
+}
+
 async function copy(text, label) {
     try { await navigator.clipboard.writeText(text); toast(`${label} copied`, 'success', 1600); }
-    catch { prompt(`Copy ${label.toLowerCase()}:`, text); }
+    catch {
+        await ask({ title: `Copy ${label.toLowerCase()}`, body: 'Copying is blocked here. Select the text below and copy it.',
+            ok: 'Done', cancel: '', extra: `<input class="input mono" readonly value="${esc(text)}" onfocus="this.select()">` });
+    }
 }
 
 // ------------------------------------------------------------------ session
@@ -628,7 +703,7 @@ function dropSession() {
 
 // ------------------------------------------------------------------ toasts from state changes
 function notify(prev, s) {
-    for (const e of s.log) if (prev && e.id > lastLogId && (e.kind === 'batch' || e.kind === 'end')) toast(e.text);
+    for (const e of s.log) if (prev && e.id > lastLogId && (e.kind === 'batch' || e.kind === 'end' || e.kind === 'vote')) toast(e.text);
     if (s.log.length) lastLogId = s.log[s.log.length - 1].id;
     if (!prev) return;
     if (prev.lot && s.lot && prev.lot.lot_id === s.lot.lot_id && prev.lot.bidder_id === me.teamId && s.lot.bidder_id !== me.teamId)
@@ -746,12 +821,15 @@ $('#btn-copy-code').addEventListener('click', () => S && copy(S.code, 'Room code
 $('#btn-copy-link').addEventListener('click', () => S && copy(`${location.origin}${location.pathname}?room=${S.code}`, 'Invite link'));
 $('#hdr-leave').addEventListener('click', async () => {
     const running = S && S.phase !== 'lobby' && S.phase !== 'finished';
-    if (running && !confirm('Leave the auction? Your team stays in and you can rejoin from the start screen.')) return;
+    if (running && !(await ask({ title: 'Leave the auction?', body: 'Your team stays in the room, and you can rejoin from the start screen.', ok: 'Leave' }))) return;
     await call('leave_room');
     if (!running) store.del('localStorage', LAST_KEY);
     dropSession();
 });
-$('#btn-new').addEventListener('click', async () => { await call('leave_room'); store.del('localStorage', LAST_KEY); dropSession(); });
+$('#btn-new').addEventListener('click', async () => {
+    if (!(await ask({ title: 'Leave this room?', body: 'You will not be able to vote on starting again. You can still download the results first.', ok: 'Leave room' }))) return;
+    await call('leave_room'); store.del('localStorage', LAST_KEY); dropSession();
+});
 
 // ------------------------------------------------------------------ lobby
 const ORDER = {
@@ -944,15 +1022,16 @@ function renderGavel() {
     box.innerHTML = `<div class="gavel"><span class="caps">Auctioneer</span>
         ${brk ? `<button class="btn sm" data-act="next_batch">Start ${esc(S.pending_batch)} now</button>
                  ${upcomingBatches().slice(1).map(([i, ub]) => `<button class="btn ghost sm" data-pick="${i}">Start ${esc(ub.name)} instead</button>`).join('')}
-                 <button class="btn ghost sm" data-act="skip_batch" data-confirm="Skip all of ${esc(S.pending_batch)}? Skipped players are not auctioned again.">Skip ${esc(S.pending_batch)}</button>`
+                 <button class="btn ghost sm" data-act="skip_batch" data-confirm="Every player in ${esc(S.pending_batch)} is set aside and not auctioned again.">Skip ${esc(S.pending_batch)}</button>`
               : `${S.paused ? '<button class="btn sm" data-act="resume">Resume</button>' : `<button class="btn ghost sm" data-act="pause" ${bidding ? '' : 'disabled'}>Pause</button>`}
                  <button class="btn ghost sm" data-act="sell_now" ${hasBid ? '' : 'disabled'}>Sell now</button>
-                 <button class="btn ghost sm" data-act="skip_player" ${bidding ? '' : 'disabled'} ${hasBid ? 'data-confirm="Skip this player and throw away the bids?"' : ''}>Skip player</button>
-                 <button class="btn ghost sm" data-act="skip_batch" data-confirm="Skip the rest of ${esc(b?.name || 'this batch')}? Skipped players are not auctioned again.">Skip rest of ${esc(b?.name || 'batch')}</button>`}
+                 <button class="btn ghost sm" data-act="skip_player" ${bidding ? '' : 'disabled'} ${hasBid ? 'data-confirm="The current bids on this player are thrown away."' : ''}>Skip player</button>
+                 <button class="btn ghost sm" data-act="skip_batch" data-confirm="The players left in ${esc(b?.name || 'this batch')} are set aside and not auctioned again.">Skip rest of ${esc(b?.name || 'batch')}</button>`}
         <span class="stepper" title="Bid timer"><button data-timer="-5" ${t <= TIMER_MIN ? 'disabled' : ''} aria-label="Shorter timer">&minus;</button><b>${t}s</b><button data-timer="5" ${t >= TIMER_MAX ? 'disabled' : ''} aria-label="Longer timer">+</button></span>
-        <button class="btn danger sm push" data-act="end" data-confirm="End the auction now? Squads become final.">End auction</button></div>`;
-    $$('[data-act]', box).forEach(btn => btn.onclick = () => {
-        if (btn.dataset.confirm && !confirm(btn.dataset.confirm)) return;
+        <button class="btn danger sm push" data-act="end" data-confirm="Squads become final and everyone goes to the results. The room can vote to start again afterwards.">End auction</button></div>`;
+    $$('[data-act]', box).forEach(btn => btn.onclick = async () => {
+        if (btn.dataset.confirm && !(await ask({ title: `${btn.textContent.trim()}?`, body: btn.dataset.confirm,
+            ok: btn.textContent.trim(), danger: btn.dataset.act === 'end' }))) return;
         ownerAction(btn.dataset.act, {}, btn);
     });
     $$('[data-pick]', box).forEach(btn => btn.onclick = () => ownerAction('start_batch', { value: Number(btn.dataset.pick) }, btn));
@@ -1135,6 +1214,8 @@ function tick() {
     }
     const pc = $('[data-phase-clock]');
     if (pc && phaseClock) pc.textContent = Math.ceil(Math.max(0, phaseClock.endsAt - now) / 1000);
+    const vc = $('[data-vote-clock]');
+    if (vc && voteClock) vc.textContent = Math.ceil(Math.max(0, voteClock.endsAt - now) / 1000);
 }
 (function loop() { tick(); requestAnimationFrame(loop); })();
 
@@ -1144,7 +1225,46 @@ function rankedTeams() {
         .sort((a, b) => (b.avgRating - a.avgRating) || (b.squad.length - a.squad.length) || (a.spent - b.spent));
 }
 
+let voteClock = null;
+function renderVote() {
+    const box = $('#res-vote');
+    const v = S.vote;
+    const present = S.teams.filter(t => t.connected).length;
+    const need = Math.max(1, Math.ceil(present * 2 / 3 - 1e-9));
+    if (!v) {
+        voteClock = null;
+        box.innerHTML = `<div class="vote idle">
+            <div><h3>Another round?</h3><div class="muted">Anyone can propose starting again. It needs ${need} of the ${present === 1 ? '1 person' : `${present} people`} here to vote yes, then everyone goes back to the lobby with fresh purses.</div></div>
+            <div class="acts"><button class="btn" data-vote="propose">Propose starting again</button></div>
+        </div>`;
+    } else {
+        voteClock = { endsAt: performance.now() + v.remaining_ms };
+        const mine = v.yes.includes(me.teamId) ? 'yes' : v.no.includes(me.teamId) ? 'no' : null;
+        const name = (id) => (S.teams.find(t => t.id === id) || {}).team || '';
+        box.innerHTML = `<div class="vote live">
+            <div><h3>${esc(v.by_team)} wants to start again</h3>
+                <div class="muted"><b>${v.yes.length}</b> of <b>${v.need}</b> yes votes needed &middot; closes in <b class="mono" data-vote-clock>-</b>s</div></div>
+            <div class="acts">${mine === 'yes'
+                ? `<span class="muted" style="align-self:center">You voted yes</span><button class="btn ghost sm" data-vote="no">Change to no</button>`
+                : mine === 'no'
+                ? `<span class="muted" style="align-self:center">You voted no</span><button class="btn ghost sm" data-vote="yes">Change to yes</button>`
+                : `<button class="btn" data-vote="yes">Yes, start again</button><button class="btn ghost" data-vote="no">No</button>`}</div>
+            <div class="meter"><div class="bar"><i style="width:${Math.min(100, v.yes.length / v.need * 100)}%"></i></div></div>
+            <div class="voters">${v.voters.map(id => {
+                const st = v.yes.includes(id) ? 'yes' : v.no.includes(id) ? 'no' : '';
+                return `<span class="voter ${st}">${esc(name(id))}${id === me.teamId ? ' (you)' : ''}${st ? '' : ' &middot; waiting'}</span>`;
+            }).join('')}</div>
+        </div>`;
+    }
+    $$('[data-vote]', box).forEach(b => b.onclick = async () => {
+        b.disabled = true;
+        const res = await call('restart_vote', { choice: b.dataset.vote });
+        if (!res.ok) { toast(res.error, 'error'); b.disabled = false; }
+    });
+}
+
 function renderResults() {
+    renderVote();
     const st = S.stats || {};
     const sales = salesInOrder();
     const ranked = rankedTeams();

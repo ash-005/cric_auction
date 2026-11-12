@@ -18,6 +18,7 @@ Design notes
 * All money is stored as integer lakhs (1 Cr = 100 L) to avoid float drift.
 """
 import csv
+import math
 import io
 import os
 import random
@@ -83,6 +84,8 @@ BID_INCREMENTS = [50, 100]          # +50 L, +1 Cr
 SOLD_PAUSE_SECONDS = 3
 TIMER_RANGE = (5, 120)
 OWNER_HANDOVER_SECONDS = 45
+RESTART_VOTE_SECONDS = 60
+RESTART_VOTE_SHARE = 2 / 3      # share of connected teams that must vote yes
 MAX_PLAYERS_IN_POOL = 2000
 IDLE_ROOM_TTL = 30 * 60
 FINISHED_ROOM_TTL = 6 * 60 * 60
@@ -250,6 +253,7 @@ class Room:
         self.log = deque(maxlen=40)
         self.log_seq = 0
         self.version = 0
+        self.vote = None         # restart vote on the results screen, see propose_restart
         self.created_at = time.time()
         self.last_active = time.time()
 
@@ -612,9 +616,73 @@ class Room:
                 self.lot['deadline'] = min(self.lot['deadline'], now + value)
         self._log(f'Bid timer set to {value}s', 'info')
 
+    # ---- restart vote (results screen) ---------------------------------
+    def _voters(self):
+        """Teams whose votes count: everyone currently connected."""
+        return [t['id'] for t in self.teams.values() if t['connected']]
+
+    def _votes_needed(self, voters):
+        return max(1, math.ceil(len(voters) * RESTART_VOTE_SHARE - 1e-9))
+
+    def propose_restart(self, team_id, now):
+        if self.phase != 'finished':
+            raise AuctionError('You can only start again once the auction has ended.')
+        if self.vote:
+            raise AuctionError('A restart vote is already running.')
+        if team_id not in self.teams:
+            raise AuctionError('You are not part of this auction.')
+        self.vote = {'by': team_id, 'yes': {team_id}, 'no': set(), 'ends': now + RESTART_VOTE_SECONDS}
+        self._log(f"{self.teams[team_id]['team']} proposed starting the auction again", 'vote')
+        self._settle_vote(now)
+
+    def cast_vote(self, team_id, yes, now):
+        if self.phase != 'finished' or not self.vote:
+            raise AuctionError('There is no vote running.')
+        if team_id not in self.teams:
+            raise AuctionError('You are not part of this auction.')
+        v = self.vote
+        (v['yes'] if yes else v['no']).add(team_id)
+        (v['no'] if yes else v['yes']).discard(team_id)
+        self._settle_vote(now)
+
+    def _settle_vote(self, now):
+        """Pass, fail or keep the vote open. Returns True if it closed."""
+        v = self.vote
+        if not v:
+            return False
+        voters = set(self._voters())
+        need = self._votes_needed(voters)
+        yes, no = v['yes'] & voters, v['no'] & voters
+        undecided = len(voters) - len(yes) - len(no)
+        if len(yes) >= need:
+            self._log(f"Restart agreed ({len(yes)} of {len(voters)} voted yes). Back to the lobby", 'vote')
+            self._reset_to_lobby()
+            return True
+        if len(yes) + undecided < need or now >= v['ends']:
+            why = 'time ran out' if now >= v['ends'] else f"{len(no)} voted no"
+            self._log(f"Restart vote failed ({why})", 'vote')
+            self.vote = None
+            return True
+        return False
+
+    def _reset_to_lobby(self):
+        for t in self.teams.values():
+            t['squad'] = []
+        for pid in self.pool:          # fresh base prices for the new auction
+            self.pool[pid]['base'] = base_price_for(self.pool[pid]['overall'])
+        self.phase = 'lobby'
+        self.batches, self.batch_idx, self.pending_batch = [], -1, None
+        self.lot, self.paused, self.paused_remaining, self.phase_until = None, False, None, None
+        self.last_result = None
+        self.unsold, self.skipped, self.unsold_round_done = [], [], False
+        self.sale_seq = 0
+        self.vote = None
+
     def tick(self, now):
         """Advance timers. Returns True if anything changed."""
         changed = False
+        if self.vote and self._settle_vote(now):
+            changed = True
         if self.phase == 'bidding' and not self.paused and self.lot and now >= self.lot['deadline']:
             self._resolve_lot(now)
             changed = True
@@ -716,12 +784,28 @@ class Room:
             'role_counts': role_counts,
             'sold_count': self.sale_seq,
             'log': list(self.log)[-25:],
+            'vote': self._vote_snapshot(now),
         }
         if self.phase == 'finished':
             snap['unsold'] = ([{**self.pool[pid], 'skipped': False} for pid in self.unsold] +
                               [{**self.pool[pid], 'skipped': True} for pid in self.skipped])
             snap['stats'] = self._stats(teams)
         return snap
+
+    def _vote_snapshot(self, now):
+        v = self.vote
+        if not v:
+            return None
+        voters = self._voters()
+        return {
+            'by': v['by'],
+            'by_team': self.teams[v['by']]['team'] if v['by'] in self.teams else '',
+            'yes': [t for t in v['yes'] if t in voters],
+            'no': [t for t in v['no'] if t in voters],
+            'voters': voters,
+            'need': self._votes_needed(voters),
+            'remaining_ms': int(max(0.0, v['ends'] - now) * 1000),
+        }
 
     def _stats(self, teams):
         sold = [p for t in teams for p in t['squad']]
@@ -989,6 +1073,21 @@ def on_start_auction(_data=None):
 def on_place_bid(data):
     data = data or {}
     return run(lambda room, tid, now: room.bid(tid, data.get('lot_id'), data.get('amount'), now))
+
+
+@socketio.on('restart_vote')
+def on_restart_vote(data):
+    """choice: 'propose', 'yes' or 'no'."""
+    choice = (data or {}).get('choice')
+
+    def act(room, tid, now):
+        if choice == 'propose':
+            room.propose_restart(tid, now)
+        elif choice in ('yes', 'no'):
+            room.cast_vote(tid, choice == 'yes', now)
+        else:
+            raise AuctionError('Unknown vote.')
+    return run(act)
 
 
 @socketio.on('owner_action')
