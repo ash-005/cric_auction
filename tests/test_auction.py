@@ -704,3 +704,33 @@ def test_restart_vote_over_socket(clients):
     assert last_state(owner)['phase'] == 'lobby'
     # joining is open again in the lobby
     assert clients().emit('join_room', {'room_code': code, 'name': 'd', 'team': 'D'}, callback=True)['ok']
+
+
+# ---------------------------------------------------------------- empty rooms
+def test_clocks_freeze_while_nobody_is_connected():
+    room, (a, b) = room_with_teams()
+    room.start(a['id'], 0)
+    room.tick(0)
+    deadline = room.lot['deadline']
+    a['connected'] = b['connected'] = False
+    room.tick(5)
+    room.tick(500)                                   # long outage
+    assert room.phase == 'bidding' and room.lot['deadline'] == pytest.approx(deadline + 500)
+    assert room.empty_since == 5
+    a['connected'] = True
+    room.tick(501)
+    assert room.empty_since is None and room.phase == 'bidding'   # clock resumes, not expired
+
+
+def test_cleanup_uses_time_since_everyone_left():
+    server.rooms.clear()
+    room, (a,) = room_with_teams(1)
+    room.start(a['id'], 0)
+    server.rooms[room.code] = room
+    a['connected'] = False
+    room.tick(100)                                   # empty from t=100
+    room.last_active = 10_000                        # a busy clock does not keep it alive
+    server.cleanup_rooms(100 + server.IDLE_ROOM_TTL - 1)
+    assert room.code in server.rooms
+    server.cleanup_rooms(100 + server.IDLE_ROOM_TTL + 1)
+    assert room.code not in server.rooms

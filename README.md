@@ -65,4 +65,33 @@ The suite covers CSV parsing, money formatting, lobby rules, bidding and race co
 
 ## Deploying on Render
 
-`render.yaml` is ready to use: Python 3.12, `gunicorn -w 1 --threads 400 --timeout 120 --bind 0.0.0.0:$PORT app:app`, health check on `/health`. Keep it to **one worker**: rooms live in memory, so a restart or a free-tier sleep clears them.
+`render.yaml` is ready to use: Python 3.12, health check on `/health`, and this start command:
+
+```bash
+gunicorn -k geventwebsocket.gunicorn.workers.GeventWebSocketWorker -w 1 --worker-connections 6000 --timeout 120 --bind 0.0.0.0:$PORT app:app
+```
+
+If the service was set up in the Render dashboard rather than from `render.yaml`, paste that start command into Settings → Start Command.
+
+Keep it to **one worker**: rooms live in memory, so a restart or a free-tier sleep clears them. The app picks gevent automatically under this command, and plain threads under `python app.py`. `/health` reports which mode is running, along with the open connections and rooms.
+
+### Capacity
+
+These were measured on one gevent worker with the load generator on the same machine (4 CPUs):
+
+| Connected people | Live rooms | Memory | Bid response time (median) |
+|---|---|---|---|
+| 1,000 | 125 | 150 MB | 3 ms |
+| 3,000 | 375 | 330 MB | 3 ms |
+| 5,000 | 625 | 400 MB | 6 ms |
+
+The limits are:
+
+- **Connections:** capped at 5,000 (`MAX_CONNECTIONS`). Past that, new visitors are told the server is busy, and everyone already playing is unaffected.
+- **Rooms:** capped at 1,500.
+- **CPU:** each bid costs roughly 2 ms of CPU. On Render's free tier (0.1 CPU) that means roughly 100 rooms bidding at full speed at once. Idle connections cost almost nothing.
+
+Other behaviour:
+
+- Rooms whose players have all disconnected freeze their clocks, and are removed after 30 minutes empty.
+- Finished rooms are removed after 6 hours.

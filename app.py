@@ -33,18 +33,34 @@ from collections import deque
 from flask import Flask, render_template, request
 from flask_socketio import SocketIO, join_room, leave_room
 
+def _detect_async_mode():
+    """gevent when running under gunicorn's gevent worker (production: thousands
+    of connections in one process); plain threads otherwise (python app.py)."""
+    forced = os.environ.get('SOCKETIO_ASYNC_MODE')
+    if forced:
+        return forced
+    try:
+        from gevent import monkey
+        if monkey.is_module_patched('socket'):
+            return 'gevent'
+    except ImportError:
+        pass
+    return 'threading'
+
+
+ASYNC_MODE = _detect_async_mode()
 app = Flask(__name__)
 log = logging.getLogger('auction')
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(name)s: %(message)s')
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'cricket_auction_secret')
 
-# Threading mode: works on any Python version and is served in production by
-# gunicorn's threaded worker (gunicorn -w 1 --threads 400 app:app), with
-# simple-websocket providing WebSocket support.
+# Production runs one gunicorn gevent worker (see render.yaml), which holds
+# thousands of WebSocket connections in a single process. Locally, python app.py
+# uses plain threads with simple-websocket. The mode is picked automatically.
 socketio = SocketIO(
     app,
     cors_allowed_origins=os.environ.get('CORS_ORIGINS', '*'),
-    async_mode=os.environ.get('SOCKETIO_ASYNC_MODE') or 'threading',
+    async_mode=ASYNC_MODE,
     ping_interval=10,
     ping_timeout=20,
     max_http_buffer_size=3_000_000,
@@ -94,8 +110,8 @@ MAX_PLAYERS_IN_POOL = 2000
 # Each open WebSocket holds one gunicorn thread (start command: --threads 400).
 # Refusing connections past this cap keeps threads free for /health and for
 # players already in a room, instead of the whole server going unresponsive.
-MAX_CONNECTIONS = int(os.environ.get('MAX_CONNECTIONS', 320))
-MAX_ROOMS = 400                 # memory guard: a room with the full pool is ~0.3 MB
+MAX_CONNECTIONS = int(os.environ.get('MAX_CONNECTIONS', 5000 if ASYNC_MODE == 'gevent' else 320))
+MAX_ROOMS = 1500                # memory guard: a room on the built-in list is ~15 KB
 IDLE_ROOM_TTL = 30 * 60
 FINISHED_ROOM_TTL = 6 * 60 * 60
 
@@ -219,6 +235,55 @@ def load_default_players():
 DEFAULT_PLAYERS = load_default_players()
 
 
+def make_records(players):
+    """Immutable per-player records (no price). pids only need to be unique within a room."""
+    records = {}
+    for i, p in enumerate(players):
+        overall = int(p['overall'])
+        pid = f'p{i}'
+        records[pid] = {
+            'pid': pid,
+            'name': p['name'],
+            'overall': overall,
+            'role': normalize_role(p.get('role')),
+            'nationality': p.get('nationality') or '-',
+            'tier': tier_for(overall),
+        }
+    return records
+
+
+# Built once and shared by every room that uses the built-in list (saves ~180 KB per room).
+DEFAULT_RECORDS = make_records(DEFAULT_PLAYERS)
+
+
+class RoomPool:
+    """A room's player pool: shared player records plus this room's base prices.
+    pool[pid] returns a fresh dict that includes 'base', like a plain dict of dicts."""
+    __slots__ = ('records', 'base')
+
+    def __init__(self, records):
+        self.records = records
+        self.reroll()
+
+    def reroll(self):
+        self.base = {pid: base_price_for(r['overall']) for pid, r in self.records.items()}
+
+    def __getitem__(self, pid):
+        return {**self.records[pid], 'base': self.base[pid]}
+
+    def __contains__(self, pid):
+        return pid in self.records
+
+    def __iter__(self):
+        return iter(self.records)
+
+    def __len__(self):
+        return len(self.records)
+
+    def values(self):
+        return [self[pid] for pid in self.records]
+
+
 # --------------------------------------------------------------------------
 # Room model (pure logic, always called with room.lock held)
 # --------------------------------------------------------------------------
@@ -227,21 +292,10 @@ class AuctionError(Exception):
 
 
 class Room:
-    def __init__(self, code, players):
+    def __init__(self, code, players=None, records=None):
         self.code = code
         self.lock = threading.Lock()
-        self.pool = {}
-        for p in players:
-            pid = uuid.uuid4().hex[:8]
-            self.pool[pid] = {
-                'pid': pid,
-                'name': p['name'],
-                'overall': int(p['overall']),
-                'role': normalize_role(p.get('role')),
-                'nationality': p.get('nationality') or '-',
-                'base': base_price_for(int(p['overall'])),
-                'tier': tier_for(int(p['overall'])),
-            }
+        self.pool = RoomPool(records if records is not None else make_records(players or []))
         self.teams = {}          # team_id -> team dict, insertion order = join order
         self.owner_id = None
         self.settings = dict(DEFAULT_SETTINGS)
@@ -263,6 +317,8 @@ class Room:
         self.log_seq = 0
         self.version = 0
         self.vote = None         # restart vote on the results screen, see propose_restart
+        self.last_tick = None
+        self.empty_since = None  # when the last connected team left (None while someone is here)
         self.created_at = time.time()
         self.last_active = time.time()
 
@@ -677,8 +733,7 @@ class Room:
     def _reset_to_lobby(self):
         for t in self.teams.values():
             t['squad'] = []
-        for pid in self.pool:          # fresh base prices for the new auction
-            self.pool[pid]['base'] = base_price_for(self.pool[pid]['overall'])
+        self.pool.reroll()             # fresh base prices for the new auction
         self.phase = 'lobby'
         self.batches, self.batch_idx, self.pending_batch = [], -1, None
         self.lot, self.paused, self.paused_remaining, self.phase_until = None, False, None, None
@@ -689,6 +744,21 @@ class Room:
 
     def tick(self, now):
         """Advance timers. Returns True if anything changed."""
+        dt = 0.0 if self.last_tick is None else max(0.0, now - self.last_tick)
+        self.last_tick = now
+        if not any(t['connected'] for t in self.teams.values()):
+            # Nobody is here: freeze every clock so no one loses a player while
+            # the whole room is reconnecting, and let cleanup see the room as idle.
+            if self.empty_since is None:
+                self.empty_since = now
+            if self.lot:
+                self.lot['deadline'] += dt
+            if self.phase_until:
+                self.phase_until += dt
+            if self.vote:
+                self.vote['ends'] += dt
+            return False
+        self.empty_since = None
         changed = False
         if self.vote and self._settle_vote(now):
             changed = True
@@ -889,9 +959,11 @@ def cleanup_rooms(now):
     with registry_lock:
         for code, room in list(rooms.items()):
             anyone_here = any(t['connected'] for t in room.teams.values())
+            empty_for = now - room.empty_since if room.empty_since else (0 if anyone_here else now - room.last_active)
             idle = now - room.last_active
-            if (not anyone_here and idle > IDLE_ROOM_TTL) or (room.phase == 'finished' and idle > FINISHED_ROOM_TTL):
+            if (not anyone_here and empty_for > IDLE_ROOM_TTL) or (room.phase == 'finished' and idle > FINISHED_ROOM_TTL):
                 rooms.pop(code, None)
+                log.info('removed room %s (%s)', code, 'empty' if not anyone_here else 'finished')
 
 
 def ensure_ticker():
@@ -964,7 +1036,7 @@ def index():
 
 @app.route('/health')
 def health_check():
-    return {'status': 'healthy', 'active_rooms': len(rooms), 'connections': len(connected_sids),
+    return {'status': 'healthy', 'active_rooms': len(rooms), 'connections': len(connected_sids), 'mode': ASYNC_MODE,
             'service': 'cricket-auction-app'}
 
 
@@ -1021,14 +1093,14 @@ def on_create_room(data):
             return {'ok': False, 'error': 'Could not read any players from that CSV. '
                                           'It needs at least Name and Overall columns.'}
     else:
-        players, skipped = [dict(p) for p in DEFAULT_PLAYERS], 0
+        players, skipped = DEFAULT_PLAYERS, 0
         if not players:
             return {'ok': False, 'error': 'Default player list is missing on the server. Upload a CSV.'}
     with registry_lock:
         if len(rooms) >= MAX_ROOMS:
             return {'ok': False, 'error': 'The server is full right now. Please try again in a few minutes.'}
         code = generate_room_code()
-        room = Room(code, players)
+        room = Room(code, records=DEFAULT_RECORDS if players is DEFAULT_PLAYERS else make_records(players))
         rooms[code] = room
     try:
         now = time.time()
