@@ -18,8 +18,10 @@ Design notes
 * All money is stored as integer lakhs (1 Cr = 100 L) to avoid float drift.
 """
 import csv
-import math
+import functools
 import io
+import logging
+import math
 import os
 import random
 import secrets
@@ -32,10 +34,12 @@ from flask import Flask, render_template, request
 from flask_socketio import SocketIO, join_room, leave_room
 
 app = Flask(__name__)
+log = logging.getLogger('auction')
+logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(name)s: %(message)s')
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'cricket_auction_secret')
 
 # Threading mode: works on any Python version and is served in production by
-# gunicorn's threaded worker (gunicorn -w 1 --threads 100 app:app), with
+# gunicorn's threaded worker (gunicorn -w 1 --threads 400 app:app), with
 # simple-websocket providing WebSocket support.
 socketio = SocketIO(
     app,
@@ -87,6 +91,11 @@ OWNER_HANDOVER_SECONDS = 45
 RESTART_VOTE_SECONDS = 60
 RESTART_VOTE_SHARE = 2 / 3      # share of connected teams that must vote yes
 MAX_PLAYERS_IN_POOL = 2000
+# Each open WebSocket holds one gunicorn thread (start command: --threads 400).
+# Refusing connections past this cap keeps threads free for /health and for
+# players already in a room, instead of the whole server going unresponsive.
+MAX_CONNECTIONS = int(os.environ.get('MAX_CONNECTIONS', 320))
+MAX_ROOMS = 400                 # memory guard: a room with the full pool is ~0.3 MB
 IDLE_ROOM_TTL = 30 * 60
 FINISHED_ROOM_TTL = 6 * 60 * 60
 
@@ -857,16 +866,23 @@ def ticker():
         socketio.sleep(0.2)
         now = time.time()
         for room in list(rooms.values()):
-            snap = None
-            with room.lock:
-                if room.tick(now):
-                    room.last_active = now
-                    snap = room.snapshot(now)
-            if snap:
-                broadcast(room, snap)
+            # One broken room must never stop the clock for every other room.
+            try:
+                snap = None
+                with room.lock:
+                    if room.tick(now):
+                        room.last_active = now
+                        snap = room.snapshot(now)
+                if snap:
+                    broadcast(room, snap)
+            except Exception:
+                log.exception('tick failed for room %s', room.code)
         if now - last_cleanup > 60:
             last_cleanup = now
-            cleanup_rooms(now)
+            try:
+                cleanup_rooms(now)
+            except Exception:
+                log.exception('room cleanup failed')
 
 
 def cleanup_rooms(now):
@@ -893,6 +909,26 @@ def current(sid):
     if not entry or entry[0] not in rooms:
         raise AuctionError('You are not in a room. Please join again.')
     return rooms[entry[0]], entry[1]
+
+
+def guarded(handler):
+    """Wrap a socket handler: non-dict payloads become {}, AuctionError becomes a
+    clean refusal, and any unexpected error is logged and still answered."""
+    @functools.wraps(handler)
+    def wrapper(data=None, *args):
+        try:
+            return handler(data if isinstance(data, dict) else {})
+        except AuctionError as exc:
+            return {'ok': False, 'error': str(exc)}
+        except Exception:
+            log.exception('handler %s failed', handler.__name__)
+            return {'ok': False, 'error': 'Something went wrong on the server. Please try again.'}
+    return wrapper
+
+
+def text(value, limit=60):
+    """Payload field as a trimmed string, whatever type the client sent."""
+    return value.strip()[:limit] if isinstance(value, str) else ''
 
 
 def run(fn):
@@ -928,19 +964,35 @@ def index():
 
 @app.route('/health')
 def health_check():
-    return {'status': 'healthy', 'active_rooms': len(rooms), 'service': 'cricket-auction-app'}
+    return {'status': 'healthy', 'active_rooms': len(rooms), 'connections': len(connected_sids),
+            'service': 'cricket-auction-app'}
 
 
 # --------------------------------------------------------------------------
 # Socket events (every handler returns an ack dict: {ok, error?, ...})
 # --------------------------------------------------------------------------
+connected_sids = set()
+
+
 @socketio.on('connect')
-def on_connect():
+def on_connect(*_args):
+    if len(connected_sids) >= MAX_CONNECTIONS:
+        log.warning('refusing connection: %d open', len(connected_sids))
+        return False
+    connected_sids.add(request.sid)
     ensure_ticker()
 
 
 @socketio.on('disconnect')
-def on_disconnect():
+def on_disconnect(*_args):
+    connected_sids.discard(request.sid)
+    try:
+        _on_disconnect()
+    except Exception:
+        log.exception('disconnect handling failed')
+
+
+def _on_disconnect():
     entry = sessions.pop(request.sid, None)
     if not entry or entry[0] not in rooms:
         return
@@ -957,12 +1009,14 @@ def on_disconnect():
 
 
 @socketio.on('create_room')
+@guarded
 def on_create_room(data):
     data = data or {}
     if request.sid in sessions:
         _leave_current(request.sid)
     if data.get('source') == 'csv':
-        players, skipped = parse_players_csv(data.get('csv_text', ''))
+        csv_text = data.get('csv_text')
+        players, skipped = parse_players_csv(csv_text if isinstance(csv_text, str) else '')
         if not players:
             return {'ok': False, 'error': 'Could not read any players from that CSV. '
                                           'It needs at least Name and Overall columns.'}
@@ -971,13 +1025,15 @@ def on_create_room(data):
         if not players:
             return {'ok': False, 'error': 'Default player list is missing on the server. Upload a CSV.'}
     with registry_lock:
+        if len(rooms) >= MAX_ROOMS:
+            return {'ok': False, 'error': 'The server is full right now. Please try again in a few minutes.'}
         code = generate_room_code()
         room = Room(code, players)
         rooms[code] = room
     try:
         now = time.time()
         with room.lock:
-            team = room.add_team(data.get('name'), data.get('team'), request.sid)
+            team = room.add_team(text(data.get('name')), text(data.get('team')), request.sid)
             attach(room, team, request.sid)
             snap = room.snapshot(now)
     except AuctionError as exc:
@@ -988,9 +1044,10 @@ def on_create_room(data):
 
 
 @socketio.on('join_room')
+@guarded
 def on_join_room(data):
     data = data or {}
-    code = str(data.get('room_code', '')).strip().upper()
+    code = text(data.get('room_code'), 8).upper()
     room = rooms.get(code)
     if not room:
         return {'ok': False, 'error': f'Room "{code}" not found. Check the code.'}
@@ -999,7 +1056,7 @@ def on_join_room(data):
     try:
         now = time.time()
         with room.lock:
-            team = room.add_team(data.get('name'), data.get('team'), request.sid)
+            team = room.add_team(text(data.get('name')), text(data.get('team')), request.sid)
             attach(room, team, request.sid)
             snap = room.snapshot(now)
     except AuctionError as exc:
@@ -1009,9 +1066,10 @@ def on_join_room(data):
 
 
 @socketio.on('rejoin')
+@guarded
 def on_rejoin(data):
     data = data or {}
-    code = str(data.get('room_code', '')).strip().upper()
+    code = text(data.get('room_code'), 8).upper()
     room = rooms.get(code)
     if not room:
         return {'ok': False, 'error': 'That room no longer exists.'}
@@ -1054,31 +1112,36 @@ def _leave_current(sid):
 
 
 @socketio.on('leave_room')
+@guarded
 def on_leave_room(_data=None):
     _leave_current(request.sid)
     return {'ok': True}
 
 
 @socketio.on('update_settings')
+@guarded
 def on_update_settings(data):
     return run(lambda room, tid, now: room.update_settings(tid, data or {}))
 
 
 @socketio.on('start_auction')
+@guarded
 def on_start_auction(_data=None):
     return run(lambda room, tid, now: room.start(tid, now))
 
 
 @socketio.on('place_bid')
+@guarded
 def on_place_bid(data):
     data = data or {}
     return run(lambda room, tid, now: room.bid(tid, data.get('lot_id'), data.get('amount'), now))
 
 
 @socketio.on('restart_vote')
+@guarded
 def on_restart_vote(data):
     """choice: 'propose', 'yes' or 'no'."""
-    choice = (data or {}).get('choice')
+    choice = data.get('choice')
 
     def act(room, tid, now):
         if choice == 'propose':
@@ -1091,6 +1154,7 @@ def on_restart_vote(data):
 
 
 @socketio.on('owner_action')
+@guarded
 def on_owner_action(data):
     data = data or {}
     return run(lambda room, tid, now: room.owner_action(tid, data.get('action'), now, data.get('value')))

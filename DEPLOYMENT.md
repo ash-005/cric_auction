@@ -35,7 +35,7 @@
 
 **Build & Deploy:**
 - **Build Command**: `pip install -r requirements.txt`
-- **Start Command**: `gunicorn -w 1 --threads 100 --timeout 120 --bind 0.0.0.0:$PORT app:app`
+- **Start Command**: `gunicorn -w 1 --threads 400 --timeout 120 --bind 0.0.0.0:$PORT app:app`
 
 **Environment Variables:**
 - `FLASK_ENV`: `production`
@@ -79,7 +79,7 @@
 1. **Create new app** from GitHub repository
 2. **Configure build settings**:
    - Build Command: `pip install -r requirements.txt`
-   - Run Command: `gunicorn -w 1 --threads 100 --timeout 120 --bind 0.0.0.0:$PORT app:app`
+   - Run Command: `gunicorn -w 1 --threads 400 --timeout 120 --bind 0.0.0.0:$PORT app:app`
 3. **Set environment variables** and deploy
 
 ## 🔐 Security Considerations

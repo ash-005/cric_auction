@@ -684,6 +684,14 @@ socket.on('connect', async () => {
     }
 });
 socket.on('disconnect', () => setConn('offline'));
+let lastConnectErrorToast = 0;
+socket.on('connect_error', () => {
+    setConn('offline');
+    if (Date.now() - lastConnectErrorToast > 20000) {
+        lastConnectErrorToast = Date.now();
+        toast('Cannot reach the server right now (it may be busy or waking up). Retrying...', 'warn', 4000);
+    }
+});
 socket.io.on('reconnect_attempt', () => setConn('offline'));
 socket.on('state', applyState);
 

@@ -65,4 +65,4 @@ The suite covers CSV parsing, money formatting, lobby rules, bidding and race co
 
 ## Deploying on Render
 
-`render.yaml` is ready to use: Python 3.12, `gunicorn -w 1 --threads 100 --timeout 120 --bind 0.0.0.0:$PORT app:app`, health check on `/health`. Keep it to **one worker**: rooms live in memory, so a restart or a free-tier sleep clears them.
+`render.yaml` is ready to use: Python 3.12, `gunicorn -w 1 --threads 400 --timeout 120 --bind 0.0.0.0:$PORT app:app`, health check on `/health`. Keep it to **one worker**: rooms live in memory, so a restart or a free-tier sleep clears them.
