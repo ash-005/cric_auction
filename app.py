@@ -61,7 +61,8 @@ SETTING_CHOICES = {
     'team_purse': [50, 90, 100, 120, 150],          # crore
     'squad_size': list(range(5, 26)),
     'max_teams': list(range(2, 13)),
-    'bid_timer': [10, 15, 20, 30],                    # seconds
+    'bid_timer': list(range(5, 121)),                 # seconds, any value 5-120
+    'break_seconds': list(range(5, 121)),             # pause between batches
     'auction_order': ['tiered', 'tiered_skill', 'random', 'skill_desc', 'alphabetical'],
 }
 DEFAULT_SETTINGS = {
@@ -69,11 +70,12 @@ DEFAULT_SETTINGS = {
     'squad_size': 11,
     'max_teams': 8,
     'bid_timer': 15,
+    'break_seconds': 20,
     'auction_order': 'tiered',
 }
 BID_INCREMENTS = [50, 100]          # +50 L, +1 Cr
 SOLD_PAUSE_SECONDS = 3
-BATCH_BREAK_SECONDS = 20
+TIMER_RANGE = (5, 120)
 OWNER_HANDOVER_SECONDS = 45
 MAX_PLAYERS_IN_POOL = 2000
 IDLE_ROOM_TTL = 30 * 60
@@ -332,6 +334,8 @@ class Room:
                     except (TypeError, ValueError):
                         raise AuctionError(f'Invalid value for {key}.')
                 if value not in choices:
+                    if key in ('bid_timer', 'break_seconds'):
+                        raise AuctionError(f'Pick a time between {TIMER_RANGE[0]} and {TIMER_RANGE[1]} seconds.')
                     raise AuctionError(f'Invalid value for {key}.')
                 self.settings[key] = value
         if self.settings['max_teams'] < len(self.teams):
@@ -421,7 +425,7 @@ class Room:
         if next_idx < len(self.batches):
             self.phase = 'batch_break'
             self.pending_batch = next_idx
-            self.phase_until = now + BATCH_BREAK_SECONDS
+            self.phase_until = now + self.settings['break_seconds']
             self._log(f"Break — next up: {self.batches[next_idx]['name']}", 'batch')
         else:
             self._finish('All players have been auctioned')
@@ -500,11 +504,13 @@ class Room:
         lot['history'].append({'team_id': team_id, 'team': team['team'], 'amount': amount, 't': now})
         lot['deadline'] = now + self.settings['bid_timer']
 
-    def owner_action(self, team_id, action, now):
+    def owner_action(self, team_id, action, now, value=None):
         self.require_owner(team_id)
         if self.phase in ('lobby', 'finished'):
             raise AuctionError('The auction is not running.')
-        if action == 'pause':
+        if action == 'set_timer':
+            self._set_timer(value, now)
+        elif action == 'pause':
             if self.phase != 'bidding' or self.paused:
                 raise AuctionError('Nothing to pause right now.')
             self.paused = True
@@ -552,6 +558,23 @@ class Room:
         else:
             raise AuctionError('Unknown action.')
 
+    def _set_timer(self, value, now):
+        """Change the bid timer mid-auction. Takes effect on the next bid or player;
+        a clock that is already running is only ever shortened, never lengthened."""
+        try:
+            value = int(value)
+        except (TypeError, ValueError):
+            raise AuctionError('Invalid timer value.')
+        if not TIMER_RANGE[0] <= value <= TIMER_RANGE[1]:
+            raise AuctionError(f'Pick a time between {TIMER_RANGE[0]} and {TIMER_RANGE[1]} seconds.')
+        self.settings['bid_timer'] = value
+        if self.phase == 'bidding' and self.lot:
+            if self.paused:
+                self.paused_remaining = min(self.paused_remaining or value, value)
+            else:
+                self.lot['deadline'] = min(self.lot['deadline'], now + value)
+        self._log(f'Bid timer set to {value}s', 'info')
+
     def tick(self, now):
         """Advance timers. Returns True if anything changed."""
         changed = False
@@ -590,7 +613,7 @@ class Room:
                 'team': t['team'],
                 'connected': t['connected'],
                 'is_owner': t['id'] == self.owner_id,
-                'squad': [{k: p[k] for k in ('pid', 'name', 'role', 'nationality', 'overall', 'price', 'seq', 'tier')}
+                'squad': [{k: p[k] for k in ('pid', 'name', 'role', 'nationality', 'overall', 'price', 'base', 'seq', 'tier')}
                           for p in t['squad']],
                 'spent': self.team_spent(t),
                 'purse_left': self.purse_left(t),
@@ -928,7 +951,7 @@ def on_place_bid(data):
 @socketio.on('owner_action')
 def on_owner_action(data):
     data = data or {}
-    return run(lambda room, tid, now: room.owner_action(tid, data.get('action'), now))
+    return run(lambda room, tid, now: room.owner_action(tid, data.get('action'), now, data.get('value')))
 
 
 if __name__ == '__main__':

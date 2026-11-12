@@ -9,22 +9,29 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700;9..144,900&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.5/socket.io.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 {% raw %}
 <style>
 :root {
     --paper: #f2ede2;
-    --paper-2: #e8e1d1;
-    --sheet: #f8f5ee;
+    --paper-2: #e9e2d3;
+    --sheet: #faf7f0;
     --ink: #1c1b18;
     --ink-2: #57534a;
     --ink-3: #8b8578;
-    --rule: #cfc6b1;
+    --rule: #ddd4c2;
+    --rule-2: #cfc5b0;
     --red: #b3261e;
+    --red-soft: #f5dfd9;
     --green: #2e5e3e;
+    --green-soft: #e1eadb;
     --amber: #9a6f17;
     --blue: #2f4b7c;
+    --r-xs: 6px;
+    --r-sm: 10px;
+    --r: 16px;
+    --r-lg: 22px;
+    --shadow: 0 1px 0 rgba(28,27,24,.03), 0 10px 30px -18px rgba(28,27,24,.35);
     --serif: 'Fraunces', Georgia, 'Times New Roman', serif;
     --sans: 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
     --mono: 'IBM Plex Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace;
@@ -34,7 +41,7 @@ html { -webkit-text-size-adjust: 100%; }
 body { margin: 0; background: var(--paper); color: var(--ink); font: 15px/1.5 var(--sans); }
 [hidden] { display: none !important; }
 button, input, select { font: inherit; color: inherit; }
-.wrap { max-width: 1240px; margin: 0 auto; padding: 0 20px; }
+.wrap { max-width: 1240px; margin: 0 auto; padding: 0 24px; }
 .mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
 .muted { color: var(--ink-2); }
 .faint { color: var(--ink-3); }
@@ -42,225 +49,281 @@ button, input, select { font: inherit; color: inherit; }
 .green { color: var(--green); }
 .caps { font-size: 11px; font-weight: 600; letter-spacing: .12em; text-transform: uppercase; color: var(--ink-2); }
 .caps.red { color: var(--red); } .caps.green { color: var(--green); } .caps.faint { color: var(--ink-3); }
+.stack > * + * { margin-top: 20px; }
 
 /* ---------- top bar ---------- */
-.top { position: sticky; top: 0; z-index: 20; background: var(--paper); border-bottom: 1px solid var(--ink); }
-.top-row { display: flex; align-items: center; gap: 16px; height: 56px; }
+.top { position: sticky; top: 0; z-index: 20; background: rgba(242,237,226,.92); backdrop-filter: saturate(1.2) blur(8px); border-bottom: 1px solid var(--rule-2); }
+.top-row { display: flex; align-items: center; gap: 14px; height: 60px; }
 .mark { display: flex; align-items: center; gap: 10px; text-decoration: none; color: inherit; font-family: var(--serif); font-weight: 900; font-size: 20px; letter-spacing: -.01em; }
-.mark svg { width: 22px; height: 22px; }
-.code-btn { font-family: var(--mono); font-size: 13px; background: none; border: 1px solid var(--ink); padding: 3px 9px; cursor: pointer; letter-spacing: .08em; }
-.code-btn:hover { background: var(--ink); color: var(--paper); }
+.mark svg { width: 24px; height: 24px; }
+.code-btn { font-family: var(--mono); font-size: 13px; font-weight: 600; background: var(--sheet); border: 1px solid var(--rule-2); border-radius: 999px; padding: 4px 12px; cursor: pointer; letter-spacing: .1em; }
+.code-btn:hover { border-color: var(--ink); }
 .top-right { margin-left: auto; display: flex; align-items: center; gap: 16px; font-size: 13px; }
-.conn { display: inline-flex; align-items: center; gap: 6px; color: var(--ink-2); }
+.conn { display: inline-flex; align-items: center; gap: 6px; color: var(--ink-2); background: var(--sheet); border: 1px solid var(--rule); border-radius: 999px; padding: 3px 10px; }
 .conn i { width: 7px; height: 7px; border-radius: 50%; background: var(--ink-3); }
-.conn.on i { background: var(--green); }
+.conn.on i { background: #3f8a57; }
 .conn.off i { background: var(--red); animation: blink 1s infinite; }
 @keyframes blink { 50% { opacity: .2; } }
 .linkbtn { background: none; border: 0; padding: 0; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; color: var(--ink-2); }
 .linkbtn:hover { color: var(--ink); }
-.tabs { display: flex; overflow-x: auto; scrollbar-width: none; }
+.tabs { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; padding-bottom: 12px; }
 .tabs::-webkit-scrollbar { display: none; }
-.tab { background: none; border: 0; padding: 10px 14px 9px; cursor: pointer; font-size: 14px; font-weight: 500; color: var(--ink-2); border-bottom: 3px solid transparent; white-space: nowrap; }
-.tab:first-child { padding-left: 0; }
-.tab:hover { color: var(--ink); }
-.tab.on { color: var(--ink); border-bottom-color: var(--red); }
-.tab .n { font-family: var(--mono); font-size: 12px; color: var(--ink-3); margin-left: 4px; }
+.tab { background: transparent; border: 1px solid transparent; border-radius: 999px; padding: 6px 14px; cursor: pointer; font-size: 14px; font-weight: 500; color: var(--ink-2); white-space: nowrap; }
+.tab:hover { color: var(--ink); background: var(--paper-2); }
+.tab.on { color: var(--paper); background: var(--ink); }
+.tab .n { font-family: var(--mono); font-size: 11px; margin-left: 6px; background: var(--paper-2); color: var(--ink-2); border-radius: 999px; padding: 1px 6px; }
+.tab.on .n { background: rgba(255,255,255,.16); color: var(--paper); }
 
 /* ---------- generic ---------- */
-main { padding: 28px 0 140px; }
-.btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; border: 1px solid var(--ink); background: var(--ink); color: var(--paper); padding: 10px 18px; font-weight: 600; font-size: 14px; cursor: pointer; border-radius: 0; transition: background .12s, color .12s; }
+main.wrap { padding-top: 32px; padding-bottom: 160px; }
+.card { background: var(--sheet); border: 1px solid var(--rule); border-radius: var(--r); padding: 22px 24px; box-shadow: var(--shadow); }
+.card.flush { padding: 0; overflow: hidden; }
+.card-title { display: flex; align-items: baseline; gap: 10px; margin: 0 0 14px; }
+.card-title h2 { font-family: var(--serif); font-size: 21px; font-weight: 700; margin: 0; letter-spacing: -.01em; }
+.card-title .aside { margin-left: auto; font-size: 13px; color: var(--ink-2); text-align: right; }
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; border: 1px solid var(--ink); background: var(--ink); color: var(--paper); padding: 10px 18px; font-weight: 600; font-size: 14px; cursor: pointer; border-radius: var(--r-sm); transition: background .12s, color .12s, border-color .12s; }
 .btn:hover { background: var(--red); border-color: var(--red); }
 .btn:active { transform: translateY(1px); }
 .btn:disabled { opacity: .35; cursor: not-allowed; background: var(--ink); border-color: var(--ink); }
-.btn.ghost { background: transparent; color: var(--ink); }
-.btn.ghost:hover { background: var(--ink); color: var(--paper); }
-.btn.ghost:disabled { background: transparent; color: var(--ink); }
-.btn.danger { background: transparent; color: var(--red); border-color: var(--red); }
-.btn.danger:hover { background: var(--red); color: var(--paper); }
-.btn.sm { padding: 6px 12px; font-size: 13px; }
-.btn.wide { width: 100%; padding: 14px; font-size: 15px; }
+.btn.ghost { background: var(--sheet); color: var(--ink); border-color: var(--rule-2); }
+.btn.ghost:hover { border-color: var(--ink); background: var(--sheet); }
+.btn.ghost:disabled { background: var(--sheet); border-color: var(--rule-2); }
+.btn.danger { background: transparent; color: var(--red); border-color: #e2b6ae; }
+.btn.danger:hover { background: var(--red); color: var(--paper); border-color: var(--red); }
+.btn.sm { padding: 7px 13px; font-size: 13px; border-radius: 9px; }
+.btn.wide { width: 100%; padding: 14px; font-size: 15px; border-radius: 12px; }
 .field { display: block; margin-bottom: 16px; }
-.field > span { display: block; margin-bottom: 6px; }
-.input { width: 100%; background: var(--sheet); border: 1px solid var(--ink); border-radius: 0; padding: 11px 12px; font-size: 15px; outline: none; }
-.input:focus { box-shadow: 0 0 0 3px rgba(179,38,30,.18); border-color: var(--red); }
-select.input { appearance: none; -webkit-appearance: none; background-image: linear-gradient(45deg, transparent 50%, var(--ink) 50%), linear-gradient(135deg, var(--ink) 50%, transparent 50%); background-position: calc(100% - 18px) 52%, calc(100% - 13px) 52%; background-size: 5px 5px; background-repeat: no-repeat; padding-right: 32px; }
-.h-section { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; border-bottom: 1px solid var(--ink); padding-bottom: 8px; margin: 0 0 12px; }
-.h-section h2 { font-family: var(--serif); font-size: 22px; font-weight: 700; margin: 0; letter-spacing: -.01em; }
-.h-section .aside { margin-left: auto; font-size: 13px; color: var(--ink-2); text-align: right; white-space: nowrap; }
-.role { display: inline-block; font-family: var(--mono); font-size: 11px; font-weight: 600; padding: 0 5px; border: 1px solid currentColor; letter-spacing: .04em; line-height: 17px; }
-.role.BAT { color: var(--blue); } .role.BOWL { color: var(--red); } .role.AR { color: var(--green); } .role.WK { color: var(--amber); }
+.field > .caps { display: block; margin-bottom: 7px; }
+.input { width: 100%; background: #fff; border: 1px solid var(--rule-2); border-radius: var(--r-sm); padding: 11px 13px; font-size: 15px; outline: none; transition: border-color .12s, box-shadow .12s; }
+.input:hover { border-color: var(--ink-3); }
+.input:focus { box-shadow: 0 0 0 3px rgba(179,38,30,.14); border-color: var(--red); }
+select.input { appearance: none; -webkit-appearance: none; background-image: linear-gradient(45deg, transparent 50%, var(--ink) 50%), linear-gradient(135deg, var(--ink) 50%, transparent 50%); background-position: calc(100% - 18px) 52%, calc(100% - 13px) 52%; background-size: 5px 5px; background-repeat: no-repeat; padding-right: 34px; }
+.pills { display: flex; flex-wrap: wrap; gap: 6px; }
+.pill { border: 1px solid var(--rule-2); background: #fff; border-radius: 999px; padding: 6px 13px; font-size: 13px; font-weight: 600; font-family: var(--mono); cursor: pointer; }
+.pill:hover { border-color: var(--ink); }
+.pill.on { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+.pill.custom { display: inline-flex; align-items: center; gap: 4px; padding: 0 12px 0 4px; cursor: text; }
+.pill.custom input { width: 64px; border: 0; background: transparent; padding: 6px 4px 6px 8px; font: inherit; outline: none; }
+.pill.custom.on input { color: var(--paper); }
+.pill.custom input::placeholder { color: var(--ink-3); font-family: var(--sans); font-weight: 500; }
+.role { display: inline-block; font-family: var(--mono); font-size: 10.5px; font-weight: 600; padding: 0 6px; border-radius: var(--r-xs); letter-spacing: .04em; line-height: 19px; }
+.role.BAT { color: var(--blue); background: #e2e7f0; } .role.BOWL { color: var(--red); background: var(--red-soft); }
+.role.AR { color: var(--green); background: var(--green-soft); } .role.WK { color: var(--amber); background: #f2e6c9; }
+.dot { display: inline-block; width: 9px; height: 9px; border-radius: 3px; margin-right: 8px; vertical-align: 0; }
 table.t { width: 100%; border-collapse: collapse; font-size: 14px; }
-table.t th { text-align: left; font-size: 11px; font-weight: 600; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-2); padding: 6px 8px; border-bottom: 1px solid var(--ink); }
-table.t td { padding: 8px; border-bottom: 1px solid var(--rule); vertical-align: middle; }
-table.t th:first-child, table.t td:first-child { padding-left: 2px; }
-table.t tr:last-child td { border-bottom: 0; }
+table.t th { text-align: left; font-size: 11px; font-weight: 600; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-3); padding: 0 10px 8px; border-bottom: 1px solid var(--rule); }
+table.t td { padding: 10px; border-bottom: 1px solid var(--rule); vertical-align: middle; }
+table.t th:first-child, table.t td:first-child { padding-left: 0; }
+table.t th:last-child, table.t td:last-child { padding-right: 0; }
+table.t tr:last-child td { border-bottom: 0; padding-bottom: 2px; }
 table.t .num { text-align: right; font-family: var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
 table.t tr.me td { font-weight: 600; }
-table.t tr.lead td { background: #f3e3cf; }
+table.t tr.lead td { color: var(--red); }
 table.t tr.away td { color: var(--ink-3); }
-.empty { padding: 26px 8px; text-align: center; color: var(--ink-3); font-size: 14px; }
-.hint { font-size: 12px; color: var(--ink-3); margin: 8px 0 0; }
-.toasts { position: fixed; z-index: 50; left: 20px; bottom: 96px; display: flex; flex-direction: column; gap: 8px; width: min(380px, calc(100vw - 40px)); pointer-events: none; }
-.toast { background: var(--ink); color: var(--paper); padding: 10px 14px; font-size: 14px; border-left: 4px solid var(--ink-3); animation: rise .18s ease-out; box-shadow: 0 6px 20px rgba(0,0,0,.18); }
+.empty { padding: 28px 8px; text-align: center; color: var(--ink-3); font-size: 14px; }
+.hint { font-size: 12.5px; color: var(--ink-3); margin: 10px 0 0; }
+.toasts { position: fixed; z-index: 50; left: 24px; bottom: 116px; display: flex; flex-direction: column; gap: 8px; width: min(380px, calc(100vw - 48px)); pointer-events: none; }
+.toast { background: var(--ink); color: var(--paper); padding: 11px 15px; font-size: 14px; border-radius: 12px; border-left: 4px solid var(--ink-3); animation: rise .18s ease-out; box-shadow: 0 10px 30px -10px rgba(0,0,0,.4); }
 .toast.error { border-left-color: #e0493e; }
 .toast.success { border-left-color: #6fae7f; }
 .toast.warn { border-left-color: #d8a63a; }
 @keyframes rise { from { transform: translateY(6px); opacity: 0; } to { transform: none; opacity: 1; } }
+.bar { height: 8px; background: var(--paper-2); border-radius: 999px; overflow: hidden; }
+.bar > i { display: block; height: 100%; background: var(--ink); border-radius: 999px; }
 
 /* ---------- setup ---------- */
-.setup { display: grid; grid-template-columns: 1.15fr 1fr; gap: 64px; align-items: start; padding-top: 20px; }
-.hero h1 { font-family: var(--serif); font-weight: 900; font-size: clamp(44px, 7vw, 84px); line-height: .95; letter-spacing: -.03em; margin: 0 0 20px; }
+.setup { display: grid; grid-template-columns: 1.1fr 1fr; gap: 56px; align-items: center; min-height: calc(100vh - 160px); padding-bottom: 40px; }
+.hero h1 { font-family: var(--serif); font-weight: 900; font-size: clamp(44px, 6.6vw, 82px); line-height: .96; letter-spacing: -.03em; margin: 0 0 20px; }
 .hero h1 em { font-style: italic; font-weight: 500; color: var(--red); }
-.hero p { font-size: 17px; max-width: 30em; color: var(--ink-2); margin: 0 0 28px; }
-.hero ol { list-style: none; counter-reset: s; padding: 0; margin: 0; border-top: 1px solid var(--ink); }
-.hero li { counter-increment: s; display: flex; gap: 14px; padding: 11px 0; border-bottom: 1px solid var(--rule); font-size: 14px; }
-.hero li::before { content: counter(s, decimal-leading-zero); font-family: var(--mono); color: var(--red); font-weight: 600; }
-.seg { display: grid; grid-template-columns: 1fr 1fr; border: 1px solid var(--ink); margin-bottom: 22px; }
-.seg button { background: none; border: 0; padding: 10px; cursor: pointer; font-weight: 600; }
-.seg button.on { background: var(--ink); color: var(--paper); }
+.hero p { font-size: 17px; max-width: 30em; color: var(--ink-2); margin: 0 0 30px; }
+.steps { list-style: none; counter-reset: s; padding: 0; margin: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.steps li { counter-increment: s; background: var(--sheet); border: 1px solid var(--rule); border-radius: 14px; padding: 14px 16px; font-size: 14px; color: var(--ink-2); }
+.steps li::before { content: counter(s, decimal-leading-zero); display: block; font-family: var(--mono); color: var(--red); font-weight: 600; font-size: 12px; margin-bottom: 4px; }
+.seg { display: grid; grid-template-columns: 1fr 1fr; background: var(--paper-2); border-radius: 12px; padding: 4px; margin-bottom: 22px; }
+.seg button { background: none; border: 0; padding: 9px; cursor: pointer; font-weight: 600; border-radius: 9px; color: var(--ink-2); }
+.seg button.on { background: var(--sheet); color: var(--ink); box-shadow: 0 1px 3px rgba(0,0,0,.08); }
 .choice { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-.choice label { display: block; border: 1px solid var(--rule); padding: 10px 12px; cursor: pointer; background: var(--sheet); font-size: 14px; font-weight: 500; }
+.choice label { display: block; border: 1px solid var(--rule-2); border-radius: 12px; padding: 11px 13px; cursor: pointer; background: #fff; font-size: 14px; font-weight: 600; }
 .choice label:has(input:checked) { border-color: var(--ink); box-shadow: inset 0 0 0 1px var(--ink); }
 .choice input { accent-color: var(--red); margin: 0 6px 0 0; }
 .choice small { display: block; color: var(--ink-3); margin-left: 22px; font-weight: 400; }
-.resume { border: 1px dashed var(--ink); padding: 12px 14px; margin-bottom: 18px; display: flex; align-items: center; gap: 12px; font-size: 14px; }
+.resume { border: 1px dashed var(--ink-3); border-radius: 12px; padding: 12px 14px; margin-bottom: 18px; display: flex; align-items: center; gap: 12px; font-size: 14px; }
 
 /* ---------- lobby ---------- */
-.lobby { display: grid; grid-template-columns: 1.4fr 1fr; gap: 48px; }
-.code-big { font-family: var(--mono); font-size: clamp(44px, 8vw, 76px); font-weight: 600; letter-spacing: .14em; line-height: 1; margin: 6px 0 16px; }
-.register { list-style: none; margin: 0; padding: 0; }
-.register li { display: flex; align-items: baseline; gap: 14px; padding: 12px 0; border-bottom: 1px solid var(--rule); }
-.register .no { font-family: var(--mono); color: var(--ink-3); font-size: 13px; width: 24px; flex: none; }
-.register .tn { font-family: var(--serif); font-size: 21px; font-weight: 700; }
+.lobby { display: grid; grid-template-columns: 1.35fr 1fr; gap: 24px; align-items: start; }
+.code-card { display: flex; flex-wrap: wrap; align-items: center; gap: 18px; }
+.code-big { font-family: var(--mono); font-size: clamp(40px, 7vw, 64px); font-weight: 600; letter-spacing: .14em; line-height: 1; }
+.code-card .acts { margin-left: auto; display: flex; gap: 8px; flex-wrap: wrap; }
+.register { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.register li { display: flex; align-items: center; gap: 12px; padding: 12px 14px; background: #fff; border: 1px solid var(--rule); border-radius: 12px; min-width: 0; }
+.register li.me { border-color: var(--ink); }
+.register .badge { width: 36px; height: 36px; border-radius: 10px; display: grid; place-items: center; color: #fff; font-family: var(--serif); font-weight: 900; font-size: 17px; flex: none; }
+.register .tn { font-family: var(--serif); font-size: 18px; font-weight: 700; line-height: 1.2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .register .tag { font-size: 12px; color: var(--ink-2); }
-.register .st { margin-left: auto; font-size: 12px; }
-.kv { display: flex; justify-content: space-between; padding: 7px 0; border-bottom: 1px solid var(--rule); font-size: 14px; }
-.kv b { font-weight: 600; }
-.bar { height: 6px; background: var(--paper-2); position: relative; }
-.bar > i { position: absolute; inset: 0 auto 0 0; background: var(--ink); }
+.register .st { margin-left: auto; width: 8px; height: 8px; border-radius: 50%; background: var(--ink-3); flex: none; }
+.register .st.on { background: #3f8a57; }
+.register li.wait { border-style: dashed; color: var(--ink-3); font-size: 13px; justify-content: center; background: transparent; }
+.kv { display: flex; justify-content: space-between; gap: 12px; padding: 9px 0; border-bottom: 1px solid var(--rule); font-size: 14px; }
+.kv:last-child { border-bottom: 0; }
+.kv b { font-weight: 600; text-align: right; }
+.waiting { border: 1px dashed var(--ink-3); border-radius: 12px; padding: 16px; text-align: center; color: var(--ink-2); margin: 0; }
 
 /* ---------- floor ---------- */
-.floor { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr); gap: 36px; align-items: start; }
-.lot { border: 1px solid var(--ink); background: var(--sheet); }
-.lot-head { display: flex; gap: 10px; align-items: center; padding: 9px 20px; border-bottom: 1px solid var(--ink); }
-.lot-body { padding: 22px 20px 20px; }
+.floor { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); gap: 24px; align-items: start; }
+.lot { background: var(--sheet); border: 1px solid var(--rule-2); border-radius: var(--r-lg); overflow: hidden; box-shadow: var(--shadow); }
+.lot-head { display: flex; gap: 10px; align-items: center; padding: 14px 24px; border-bottom: 1px solid var(--rule); }
+.lot-body { padding: 24px 24px 22px; }
 .lot-name { font-family: var(--serif); font-weight: 900; font-size: clamp(34px, 5vw, 56px); line-height: 1; letter-spacing: -.025em; margin: 0 0 14px; overflow-wrap: anywhere; }
-.lot-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 18px; font-size: 14px; color: var(--ink-2); }
+.lot-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 18px; font-size: 14px; color: var(--ink-2); }
 .lot-meta b { color: var(--ink); font-weight: 600; }
-.board { display: grid; grid-template-columns: 1.15fr 1fr; border-top: 1px solid var(--ink); }
-.board > div { padding: 16px 20px; min-width: 0; }
-.board > div + div { border-left: 1px solid var(--ink); }
-.board .big { font-family: var(--mono); font-weight: 600; font-size: clamp(36px, 5.2vw, 56px); line-height: 1.05; letter-spacing: -.02em; }
-.board .who { font-family: var(--serif); font-weight: 700; font-size: 25px; line-height: 1.15; overflow-wrap: anywhere; margin-top: 4px; }
-.board.mine { background: #e5ecdc; }
-.clock { border-top: 1px solid var(--ink); padding: 12px 20px; display: flex; align-items: center; gap: 14px; }
-.clock .track { flex: 1; height: 10px; background: var(--paper-2); position: relative; overflow: hidden; }
-.clock .fill { position: absolute; inset: 0 auto 0 0; background: var(--ink); width: 100%; }
+.board { display: grid; grid-template-columns: 1.15fr 1fr; gap: 12px; padding: 0 24px; }
+.board > div { padding: 16px 18px; min-width: 0; background: #fff; border: 1px solid var(--rule); border-radius: 14px; transition: background .3s; }
+.board .big { font-family: var(--mono); font-weight: 600; font-size: clamp(34px, 5vw, 52px); line-height: 1.1; letter-spacing: -.02em; margin-top: 2px; }
+.board .who { font-family: var(--serif); font-weight: 700; font-size: 25px; line-height: 1.15; overflow-wrap: anywhere; margin-top: 6px; }
+.board.mine > div { background: var(--green-soft); border-color: #c6d6bd; }
+.clock { padding: 18px 24px 20px; display: flex; align-items: center; gap: 14px; }
+.clock .track { flex: 1; height: 10px; background: var(--paper-2); border-radius: 999px; position: relative; overflow: hidden; }
+.clock .fill { position: absolute; inset: 0 auto 0 0; background: var(--ink); width: 100%; border-radius: 999px; }
 .clock.hot .fill { background: var(--red); }
-.clock .secs { font-family: var(--mono); font-weight: 600; font-size: 22px; width: 3ch; text-align: right; }
+.clock.paused .fill { background: var(--ink-3); }
+.clock .secs { font-family: var(--mono); font-weight: 600; font-size: 22px; min-width: 3ch; text-align: right; }
 .clock.hot .secs { color: var(--red); }
-.history { border-top: 1px solid var(--ink); padding: 10px 20px 14px; }
-.history ol { list-style: none; margin: 6px 0 0; padding: 0; font-size: 14px; }
-.history li { display: flex; gap: 12px; padding: 2px 0; color: var(--ink-2); }
+.history { border-top: 1px solid var(--rule); padding: 14px 24px 18px; }
+.history ol { list-style: none; margin: 8px 0 0; padding: 0; font-size: 14px; }
+.history li { display: flex; gap: 12px; padding: 3px 0; color: var(--ink-2); }
 .history li:first-child { color: var(--ink); font-weight: 600; }
 .history .amt { font-family: var(--mono); width: 7.5em; flex: none; }
-.stamp-wrap { padding: 46px 20px 42px; text-align: center; }
-.stamp { display: inline-block; font-family: var(--serif); font-weight: 900; font-size: clamp(56px, 10vw, 104px); letter-spacing: .02em; line-height: 1; padding: 10px 28px 6px; border: 6px double currentColor; transform: rotate(-5deg); animation: thump .35s cubic-bezier(.2,1.4,.4,1) both; }
+.stamp-wrap { padding: 52px 24px 48px; text-align: center; }
+.stamp { display: inline-block; font-family: var(--serif); font-weight: 900; font-size: clamp(56px, 10vw, 100px); letter-spacing: .02em; line-height: 1; padding: 12px 30px 8px; border: 6px double currentColor; border-radius: 18px; transform: rotate(-4deg); animation: thump .35s cubic-bezier(.2,1.4,.4,1) both; }
 .stamp.sold { color: var(--red); }
 .stamp.unsold { color: var(--ink-3); }
-@keyframes thump { from { transform: scale(1.5) rotate(-5deg); opacity: 0; } to { transform: rotate(-5deg); opacity: 1; } }
-.stamp-sub { margin-top: 28px; font-size: 18px; }
+@keyframes thump { from { transform: scale(1.5) rotate(-4deg); opacity: 0; } to { transform: rotate(-4deg); opacity: 1; } }
+.stamp-sub { margin-top: 30px; font-size: 18px; }
 .stamp-sub .mono { font-size: 30px; font-weight: 600; display: block; margin-bottom: 2px; }
-.interval { padding: 44px 20px; text-align: center; }
-.interval h3 { font-family: var(--serif); font-size: 46px; font-weight: 900; margin: 6px 0 6px; letter-spacing: -.02em; }
-.gavel { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 16px; padding-top: 14px; border-top: 1px dashed var(--ink); }
+.interval { padding: 52px 24px; text-align: center; }
+.interval h3 { font-family: var(--serif); font-size: 46px; font-weight: 900; margin: 6px 0 8px; letter-spacing: -.02em; }
+.gavel { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 16px; padding: 12px 14px; background: var(--paper-2); border-radius: 14px; }
 .gavel .caps { margin-right: 4px; }
 .gavel .push { margin-left: auto; }
+.stepper { display: inline-flex; align-items: center; background: var(--sheet); border: 1px solid var(--rule-2); border-radius: 9px; overflow: hidden; }
+.stepper button { border: 0; background: none; width: 30px; height: 32px; cursor: pointer; font-size: 16px; font-weight: 600; }
+.stepper button:hover { background: var(--paper-2); }
+.stepper button:disabled { opacity: .3; cursor: not-allowed; }
+.stepper b { font-family: var(--mono); font-size: 13px; min-width: 4.2ch; text-align: center; }
 .flash { animation: flash .6s ease-out; }
-@keyframes flash { from { background: #f0d4ad; } }
+@keyframes flash { from { background: #f6dcbc; } }
 
-/* ---------- bid bar ---------- */
-.bidbar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 30; background: var(--ink); color: var(--paper); }
-.bidbar .wrap { display: flex; align-items: center; gap: 18px; min-height: 76px; padding-top: 10px; padding-bottom: 10px; }
+/* ---------- bid dock ---------- */
+.bidbar { position: fixed; left: 0; right: 0; bottom: 16px; z-index: 30; pointer-events: none; }
+.dock { pointer-events: auto; max-width: 1192px; margin: 0 auto; background: var(--ink); color: var(--paper); border-radius: 20px; display: flex; align-items: center; gap: 18px; min-height: 78px; padding: 12px 12px 12px 24px; box-shadow: 0 18px 40px -16px rgba(0,0,0,.55); }
 .bb-info { min-width: 0; flex: 1; }
 .bb-name { font-family: var(--serif); font-size: 19px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .bb-line { font-size: 13px; color: #c9c2b2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .bb-line .mono { color: var(--paper); font-weight: 600; }
 .bb-note { font-size: 12px; color: #e3b45a; margin-top: 1px; }
-.bb-secs { font-family: var(--mono); font-size: 30px; font-weight: 600; width: 2.4ch; text-align: right; }
+.bb-secs { font-family: var(--mono); font-size: 30px; font-weight: 600; min-width: 2.4ch; text-align: right; }
 .bb-secs.hot { color: #ff6b5e; }
 .bb-btns { display: flex; gap: 8px; }
-.bidbtn { background: var(--paper); color: var(--ink); border: 0; padding: 8px 16px; min-width: 132px; cursor: pointer; text-align: left; }
+.bidbtn { background: var(--paper); color: var(--ink); border: 0; padding: 9px 18px; min-width: 136px; cursor: pointer; text-align: left; border-radius: 13px; transition: background .1s, transform .06s; }
 .bidbtn:hover { background: #fff; }
-.bidbtn:active { transform: translateY(1px); }
+.bidbtn:active { transform: scale(.98); }
 .bidbtn b { display: block; font-family: var(--mono); font-size: 19px; font-weight: 600; line-height: 1.2; }
 .bidbtn small { font-size: 11px; color: var(--ink-2); letter-spacing: .03em; }
 .bidbtn.primary { background: var(--red); color: #fff; }
 .bidbtn.primary small { color: #f6d5d0; }
 .bidbtn.primary:hover { background: #c93228; }
-.bidbtn:disabled { opacity: .3; cursor: not-allowed; }
+.bidbtn:disabled { opacity: .3; cursor: not-allowed; transform: none; }
 
 /* ---------- squad / teams / players / log ---------- */
-.figures { display: grid; grid-template-columns: repeat(4, 1fr); border-top: 1px solid var(--ink); border-bottom: 1px solid var(--ink); margin-bottom: 22px; }
-.figures > div { padding: 12px 14px; min-width: 0; }
-.figures > div:first-child { padding-left: 2px; }
-.figures > div + div { border-left: 1px solid var(--rule); }
-.figures .v { font-family: var(--mono); font-size: 24px; font-weight: 600; line-height: 1.25; }
-.rolebar { display: flex; height: 24px; border: 1px solid var(--ink); margin: 4px 0 8px; background: var(--paper-2); }
-.rolebar > i { display: flex; align-items: center; justify-content: center; font-style: normal; font-family: var(--mono); font-size: 11px; color: #fff; font-weight: 600; overflow: hidden; }
-.legend { display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 13px; color: var(--ink-2); margin-bottom: 18px; }
-.legend span::before { content: ''; display: inline-block; width: 9px; height: 9px; margin-right: 6px; background: var(--c); }
-#my-squad, [data-pane-body="log"] { max-width: 860px; }
-.cols-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 36px; }
-details.team { border-top: 1px solid var(--ink); }
-details.team:last-of-type { border-bottom: 1px solid var(--ink); }
-details.team > summary { list-style: none; cursor: pointer; display: grid; grid-template-columns: 1fr auto auto auto; gap: 20px; align-items: baseline; padding: 12px 2px; }
+.figures { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+.figure { background: #fff; border: 1px solid var(--rule); border-radius: 14px; padding: 14px 16px; min-width: 0; }
+.figure .v { font-family: var(--mono); font-size: 24px; font-weight: 600; line-height: 1.25; margin-top: 2px; white-space: nowrap; }
+.figure .sub { font-size: 12.5px; color: var(--ink-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rolebar { display: flex; height: 12px; border-radius: 999px; overflow: hidden; background: var(--paper-2); gap: 2px; margin: 2px 0 10px; }
+.rolebar > i { display: block; height: 100%; }
+.legend { display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 13px; color: var(--ink-2); }
+.legend b { color: var(--ink); }
+.pane-narrow { max-width: 880px; }
+.team-list { display: grid; gap: 12px; }
+details.team { background: var(--sheet); border: 1px solid var(--rule); border-radius: var(--r); box-shadow: var(--shadow); overflow: hidden; }
+details.team > summary { list-style: none; cursor: pointer; display: grid; grid-template-columns: 1fr auto auto auto 20px; gap: 22px; align-items: center; padding: 14px 20px; }
 details.team > summary::-webkit-details-marker { display: none; }
-details.team > summary .tn { font-family: var(--serif); font-size: 20px; font-weight: 700; }
-details.team > summary .tn::before { content: '+'; font-family: var(--mono); display: inline-block; width: 1.4em; color: var(--ink-3); font-weight: 400; }
-details.team[open] > summary .tn::before { content: '\2212'; }
-details.team > div { padding: 0 2px 16px; }
-.batches { list-style: none; margin: 0 0 28px; padding: 0; }
-.batches li { display: grid; grid-template-columns: 1fr 7em; gap: 6px 16px; padding: 10px 0; border-bottom: 1px solid var(--rule); align-items: center; }
+details.team > summary:hover { background: #fff; }
+details.team > summary .tn { font-family: var(--serif); font-size: 19px; font-weight: 700; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+details.team > summary .chev { width: 8px; height: 8px; border-right: 2px solid var(--ink-3); border-bottom: 2px solid var(--ink-3); transform: rotate(45deg); transition: transform .15s; justify-self: end; margin-top: -4px; }
+details.team[open] > summary .chev { transform: rotate(-135deg); margin-top: 4px; }
+details.team > div { padding: 6px 20px 18px; border-top: 1px solid var(--rule); }
+.batches { list-style: none; margin: 0; padding: 0; }
+.batches li { display: grid; grid-template-columns: 1fr auto; gap: 8px 16px; padding: 12px 0; border-bottom: 1px solid var(--rule); align-items: center; }
+.batches li:last-child { border-bottom: 0; }
 .batches li .bar { grid-column: 1 / -1; }
 .batches li.current .bn { font-weight: 700; }
-.batches li.current .bn::after { content: '  \2190 now'; color: var(--red); font-size: 12px; font-weight: 600; }
+.batches li.current .bn::after { content: 'now'; margin-left: 8px; color: var(--red); background: var(--red-soft); font-size: 11px; font-weight: 600; padding: 1px 8px; border-radius: 999px; }
+.batches li.current .bar > i { background: var(--red); }
 .batches li.done { color: var(--ink-3); }
 .batches li.done .bar > i { background: var(--ink-3); }
 .log { list-style: none; margin: 0; padding: 0; font-size: 14px; }
-.log li { display: grid; grid-template-columns: 6em 1fr; gap: 12px; padding: 7px 0; border-bottom: 1px solid var(--rule); }
+.log li { display: grid; grid-template-columns: 6em 1fr; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--rule); }
+.log li:last-child { border-bottom: 0; }
 .log time { font-family: var(--mono); font-size: 12px; color: var(--ink-3); padding-top: 2px; }
 .log .k-sold { font-weight: 600; }
 .log .k-unsold, .log .k-join, .log .k-leave, .log .k-info { color: var(--ink-2); }
 .log .k-batch, .log .k-start, .log .k-end { color: var(--red); font-weight: 600; }
 
 /* ---------- results ---------- */
-.res-head { display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-end; border-bottom: 3px double var(--ink); padding-bottom: 16px; margin-bottom: 24px; }
-.res-head h1 { font-family: var(--serif); font-weight: 900; font-size: clamp(40px, 6vw, 64px); line-height: 1; letter-spacing: -.03em; margin: 4px 0 0; }
+.res-head { display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-end; margin-bottom: 24px; }
+.res-head h1 { font-family: var(--serif); font-weight: 900; font-size: clamp(40px, 6vw, 60px); line-height: 1; letter-spacing: -.03em; margin: 6px 0 0; }
 .res-head .actions { margin-left: auto; display: flex; gap: 8px; flex-wrap: wrap; }
-.charts { display: grid; grid-template-columns: 1fr 1fr; gap: 36px; margin-bottom: 36px; }
-.chart-box { height: 260px; position: relative; }
-.res-teams { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 36px; }
+.res-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+.rank { display: inline-grid; place-items: center; width: 26px; height: 26px; border-radius: 8px; background: var(--paper-2); font-family: var(--mono); font-size: 12px; font-weight: 600; }
+.rank.r1 { background: var(--ink); color: var(--paper); }
+.spend-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px 16px; padding: 10px 0; border-bottom: 1px solid var(--rule); align-items: baseline; }
+.spend-row:last-child { border-bottom: 0; }
+.spend-row .bar { grid-column: 1 / -1; height: 10px; }
+.spend-row .tn { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.res-teams { display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); gap: 24px; }
+.team-card .head { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
+.team-card .badge { width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; color: #fff; font-family: var(--serif); font-weight: 900; font-size: 19px; flex: none; }
+.team-card .tn { font-family: var(--serif); font-size: 21px; font-weight: 700; line-height: 1.15; overflow-wrap: anywhere; }
+.team-card .meta { font-size: 13px; color: var(--ink-2); }
+.team-card .nums { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 16px; }
+.team-card .nums > div { background: #fff; border: 1px solid var(--rule); border-radius: 12px; padding: 9px 12px; }
+.team-card .nums .v { font-family: var(--mono); font-weight: 600; font-size: 16px; }
+details.plain > summary { cursor: pointer; list-style: none; display: flex; align-items: center; gap: 10px; }
+details.plain > summary::-webkit-details-marker { display: none; }
+details.plain > summary .chev { width: 8px; height: 8px; border-right: 2px solid var(--ink-3); border-bottom: 2px solid var(--ink-3); transform: rotate(45deg); margin-left: auto; transition: transform .15s; }
+details.plain[open] > summary .chev { transform: rotate(-135deg); }
 
-@media (max-width: 920px) {
-    .setup, .lobby, .floor, .cols-2, .charts { grid-template-columns: 1fr; gap: 30px; }
+@media (max-width: 980px) {
+    .setup, .lobby, .floor, .res-grid { grid-template-columns: 1fr; }
+    .setup { min-height: 0; gap: 36px; }
     .figures { grid-template-columns: repeat(2, 1fr); }
-    .figures > div:nth-child(3) { border-left: 0; padding-left: 2px; }
-    .figures > div:nth-child(n+3) { border-top: 1px solid var(--rule); }
 }
 @media (max-width: 640px) {
     .wrap { padding: 0 14px; }
-    main { padding: 18px 0 170px; }
+    main.wrap { padding-top: 20px; padding-bottom: 200px; }
+    .mark { font-size: 17px; white-space: nowrap; }
+    .conn span { display: none; }
+    .conn { padding: 6px; }
+    .top-right { gap: 12px; }
+    table.t .hide-sm { display: none; }
     #hdr-team { display: none; }
-    .lot-head, .lot-body, .board > div, .clock, .history { padding-left: 14px; padding-right: 14px; }
-    .bidbar .wrap { flex-wrap: wrap; gap: 8px 12px; padding-top: 8px; padding-bottom: 10px; }
+    .card { padding: 18px 16px; border-radius: 14px; }
+    .steps, .register { grid-template-columns: 1fr; }
+    .lot { border-radius: 18px; }
+    .lot-head, .lot-body, .clock, .history { padding-left: 16px; padding-right: 16px; }
+    .board { grid-template-columns: 1fr; padding: 0 16px; gap: 10px; }
+    .bidbar { bottom: 0; }
+    .dock { border-radius: 20px 20px 0 0; flex-wrap: wrap; gap: 8px 12px; padding: 12px 12px 14px 16px; }
     .bb-info { flex: 1 1 calc(100% - 60px); }
     .bb-btns { width: 100%; }
     .bidbtn { flex: 1; min-width: 0; }
     .res-teams { grid-template-columns: 1fr; }
-    details.team > summary { grid-template-columns: 1fr auto; }
+    details.team > summary { grid-template-columns: 1fr auto 20px; padding: 12px 16px; gap: 12px; }
     details.team > summary .hide-sm { display: none; }
-    .toasts { left: 14px; bottom: 150px; }
+    details.team > div { padding: 6px 16px 16px; }
+    .toasts { left: 14px; bottom: 160px; }
+    .team-card .nums .v { font-size: 14px; }
 }
 </style>
 {% endraw %}
@@ -300,14 +363,14 @@ details.team > div { padding: 0 2px 16px; }
             <div class="caps" style="margin-bottom:16px">Live player auction</div>
             <h1>Pick your XI.<br><em>Outbid</em> your mates.</h1>
             <p>Open a room, share the code, and bid on players in real time. The best players go under the hammer first.</p>
-            <ol>
+            <ol class="steps">
                 <li>Create a room and set the purse, squad size and timer.</li>
                 <li>Friends join with the code or the invite link.</li>
-                <li>Bid in batches: top, mid, then the rest. The auctioneer can skip a batch.</li>
-                <li>Download every squad as a spreadsheet, during or after.</li>
+                <li>Bid in batches: top, mid, then the rest.</li>
+                <li>Download every squad as a spreadsheet.</li>
             </ol>
         </div>
-        <div>
+        <div class="card" style="padding:26px">
             <div id="resume" class="resume" hidden></div>
             <div class="seg">
                 <button class="on" data-mode="create">Start a room</button>
@@ -327,13 +390,13 @@ details.team > div { padding: 0 2px 16px; }
                         <p class="hint">Needs a header row with at least Name and Overall. Role and Nationality are optional, and the column order does not matter.</p>
                     </div>
                 </div>
-                <button id="btn-create" class="btn wide" type="submit">Create room</button>
+                <button id="btn-create" class="btn wide" type="submit" style="margin-top:6px">Create room</button>
             </form>
             <form id="form-join" autocomplete="off" hidden>
                 <label class="field"><span class="caps">Room code</span><input id="j-code" class="input mono" style="text-transform:uppercase;letter-spacing:.2em;font-size:20px" maxlength="8" required></label>
                 <label class="field"><span class="caps">Your name</span><input id="j-name" class="input" maxlength="30" required></label>
                 <label class="field"><span class="caps">Team name</span><input id="j-team" class="input" maxlength="30" placeholder="Defaults to your name"></label>
-                <button id="btn-join" class="btn wide" type="submit">Join room</button>
+                <button id="btn-join" class="btn wide" type="submit" style="margin-top:6px">Join room</button>
             </form>
         </div>
     </div>
@@ -342,22 +405,29 @@ details.team > div { padding: 0 2px 16px; }
 <!-- ======================= lobby ======================= -->
 <section id="screen-lobby" hidden>
     <div class="lobby">
-        <div>
-            <div class="caps">Room code</div>
-            <div id="lobby-code" class="code-big"></div>
-            <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:36px">
-                <button id="btn-copy-code" class="btn ghost sm">Copy code</button>
-                <button id="btn-copy-link" class="btn ghost sm">Copy invite link</button>
+        <div class="stack">
+            <div class="card code-card">
+                <div><div class="caps" style="margin-bottom:8px">Room code</div><div id="lobby-code" class="code-big"></div></div>
+                <div class="acts">
+                    <button id="btn-copy-code" class="btn ghost sm">Copy code</button>
+                    <button id="btn-copy-link" class="btn ghost sm">Copy invite link</button>
+                </div>
             </div>
-            <div class="h-section"><h2>Teams</h2><span class="aside mono" id="lobby-count"></span></div>
-            <ol id="lobby-teams" class="register"></ol>
+            <div class="card">
+                <div class="card-title"><h2>Teams</h2><span class="aside mono" id="lobby-count"></span></div>
+                <ol id="lobby-teams" class="register"></ol>
+            </div>
         </div>
-        <div>
-            <div class="h-section"><h2>Rules</h2><span class="aside" id="settings-note"></span></div>
-            <div id="settings-form"></div>
-            <div class="h-section" style="margin-top:30px"><h2>Pool</h2><span class="aside mono" id="pool-size"></span></div>
-            <div id="pool-summary"></div>
-            <div id="lobby-start" style="margin-top:28px"></div>
+        <div class="stack">
+            <div class="card">
+                <div class="card-title"><h2>Rules</h2><span class="aside" id="settings-note"></span></div>
+                <div id="settings-form"></div>
+            </div>
+            <div class="card">
+                <div class="card-title"><h2>Pool</h2><span class="aside mono" id="pool-size"></span></div>
+                <div id="pool-summary"></div>
+            </div>
+            <div id="lobby-start"></div>
         </div>
     </div>
 </section>
@@ -370,28 +440,25 @@ details.team > div { padding: 0 2px 16px; }
                 <div id="lot" class="lot"></div>
                 <div id="gavel"></div>
             </div>
-            <div>
-                <div class="h-section"><h2>Standings</h2></div>
-                <table class="t" id="standings"></table>
-                <div class="h-section" style="margin-top:30px"><h2>Up next</h2><span class="aside" id="next-batch"></span></div>
-                <table class="t" id="upnext"></table>
+            <div class="stack">
+                <div class="card"><div class="card-title"><h2>Standings</h2></div><table class="t" id="standings"></table></div>
+                <div class="card"><div class="card-title"><h2>Up next</h2><span class="aside" id="next-batch"></span></div><table class="t" id="upnext"></table></div>
             </div>
         </div>
     </div>
-    <div data-pane-body="squad" hidden><div id="my-squad"></div></div>
+    <div data-pane-body="squad" hidden><div id="my-squad" class="pane-narrow stack"></div></div>
     <div data-pane-body="teams" hidden>
-        <div class="h-section"><h2>All teams</h2><span class="aside"><button class="linkbtn" data-export="xlsx">Download Excel</button> &nbsp; <button class="linkbtn" data-export="json">JSON</button></span></div>
-        <div id="all-teams"></div>
+        <div class="card-title" style="margin-bottom:16px"><h2 style="font-size:26px">All teams</h2><span class="aside"><button class="btn ghost sm" data-export="xlsx">Download Excel</button> <button class="btn ghost sm" data-export="json">JSON</button></span></div>
+        <div id="all-teams" class="team-list"></div>
     </div>
     <div data-pane-body="players" hidden>
-        <div class="cols-2">
-            <div><div class="h-section"><h2>Batches</h2><span class="aside mono" id="sold-unsold"></span></div><ul id="batches" class="batches"></ul></div>
-            <div><div class="h-section"><h2>Next five</h2></div><table class="t" id="upnext-2"></table></div>
+        <div class="res-grid">
+            <div class="card"><div class="card-title"><h2>Batches</h2><span class="aside mono" id="sold-unsold"></span></div><ul id="batches" class="batches"></ul></div>
+            <div class="card"><div class="card-title"><h2>Next five</h2></div><table class="t" id="upnext-2"></table></div>
         </div>
     </div>
     <div data-pane-body="log" hidden>
-        <div class="h-section"><h2>Log</h2><span class="aside">newest first</span></div>
-        <ol id="log" class="log"></ol>
+        <div class="card pane-narrow"><div class="card-title"><h2>Log</h2><span class="aside">newest first</span></div><ol id="log" class="log"></ol></div>
     </div>
 </section>
 
@@ -405,20 +472,30 @@ details.team > div { padding: 0 2px 16px; }
             <button id="btn-new" class="btn ghost">New auction</button>
         </div>
     </div>
-    <div id="res-figures" class="figures"></div>
-    <div class="charts">
-        <div><div class="h-section"><h2>Spend</h2><span class="aside">crore, spent and left</span></div><div class="chart-box"><canvas id="chart-spend"></canvas></div></div>
-        <div><div class="h-section"><h2>Make-up</h2><span class="aside">players by role</span></div><div class="chart-box"><canvas id="chart-roles"></canvas></div></div>
+    <div class="stack">
+        <div id="res-figures" class="figures"></div>
+        <div class="card">
+            <div class="card-title"><h2>Table</h2><span class="aside">ranked by average player rating</span></div>
+            <div style="overflow-x:auto"><table class="t" id="res-table"></table></div>
+        </div>
+        <div class="res-grid">
+            <div class="card"><div class="card-title"><h2>Purse used</h2><span class="aside">spent out of the purse</span></div><div id="res-spend"></div></div>
+            <div class="card"><div class="card-title"><h2>Top buys</h2></div><table class="t" id="res-top"></table></div>
+        </div>
+        <div class="card"><div class="card-title"><h2>Steals</h2><span class="aside">best rated players bought at or near base price</span></div><table class="t" id="res-steals"></table></div>
+        <div>
+            <div class="card-title" style="margin:12px 0 16px"><h2 style="font-size:26px">Squads</h2></div>
+            <div id="res-teams" class="res-teams"></div>
+        </div>
+        <details id="res-unsold" class="card plain">
+            <summary><h2 class="tn" style="font-family:var(--serif);font-size:21px;margin:0"></h2><span class="faint" style="font-size:13px">show</span><span class="chev"></span></summary>
+            <div style="margin-top:14px"><table class="t"></table></div>
+        </details>
     </div>
-    <div id="res-teams" class="res-teams"></div>
-    <details id="res-unsold" class="team" style="margin-top:36px">
-        <summary><span class="tn"></span></summary>
-        <div><table class="t"></table></div>
-    </details>
 </section>
 </main>
 
-<footer id="bidbar" class="bidbar" hidden><div class="wrap" id="bidbar-inner"></div></footer>
+<div id="bidbar" class="bidbar" hidden><div class="dock" id="bidbar-inner"></div></div>
 
 {% raw %}
 <script>
@@ -439,12 +516,15 @@ function fmt(lakhs) {
 }
 const toCr = (l) => Math.round(((Number(l) || 0) / CR) * 100) / 100;
 const plural = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`;
+const avg = (xs) => xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : 0;
 
 const ROLES = ['Batsman', 'Bowler', 'All-rounder', 'Wicket-keeper'];
 const ROLE_SHORT = { 'Batsman': 'BAT', 'Bowler': 'BOWL', 'All-rounder': 'AR', 'Wicket-keeper': 'WK' };
-const ROLE_COLOR = { 'Batsman': '#2f4b7c', 'Bowler': '#b3261e', 'All-rounder': '#2e5e3e', 'Wicket-keeper': '#9a6f17' };
+const ROLE_COLOR = { 'Batsman': '#2f4b7c', 'Bowler': '#b3261e', 'All-rounder': '#2e5e3e', 'Wicket-keeper': '#b38420' };
 const role = (r) => `<span class="role ${ROLE_SHORT[r] || ''}">${esc(ROLE_SHORT[r] || r)}</span>`;
-const TEAM_COLORS = ['#1c1b18', '#b3261e', '#2e5e3e', '#9a6f17', '#2f4b7c', '#6d3b5e', '#2a7570', '#a4552a', '#5b6b2e', '#7a6a58', '#3f3f8f', '#8f3f6f'];
+const TEAM_COLORS = ['#1c1b18', '#b3261e', '#2e5e3e', '#b38420', '#2f4b7c', '#6d3b5e', '#2a7570', '#a4552a', '#5b6b2e', '#7a6a58', '#3f3f8f', '#8f3f6f'];
+const TIMER_PRESETS = [10, 15, 20, 30, 45, 60];
+const TIMER_MIN = 5, TIMER_MAX = 120;
 
 function toast(msg, kind = 'info', ms = 3200) {
     const box = $('#toasts');
@@ -452,9 +532,9 @@ function toast(msg, kind = 'info', ms = 3200) {
     el.className = `toast ${kind}`;
     el.textContent = msg;
     box.appendChild(el);
-    const max = window.innerWidth < 640 ? 2 : 4;
-    while (box.children.length > max) box.firstChild.remove();
-    if (window.innerWidth < 640) ms = Math.min(ms, 2200);
+    const narrow = window.innerWidth < 640;
+    while (box.children.length > (narrow ? 2 : 4)) box.firstChild.remove();
+    if (narrow) ms = Math.min(ms, 2200);
     setTimeout(() => { el.style.transition = 'opacity .25s'; el.style.opacity = '0'; setTimeout(() => el.remove(), 260); }, ms);
 }
 async function copy(text, label) {
@@ -474,7 +554,6 @@ const store = {
 };
 let me = store.get('sessionStorage', TAB_KEY);   // { code, token, teamId, team }
 let S = null;
-let pane = 'floor';
 let lotClock = null, phaseClock = null, lastLogId = 0;
 
 // ------------------------------------------------------------------ socket
@@ -514,7 +593,6 @@ function applyState(snap) {
 function dropSession() {
     store.del('sessionStorage', TAB_KEY);
     me = null; S = null;
-    destroyCharts();
     showScreen('setup');
 }
 
@@ -528,6 +606,8 @@ function notify(prev, s) {
     if (s.last_result && s.last_result.winner_id === me.teamId && prev.last_result?.player.pid !== s.last_result.player.pid)
         toast(`${s.last_result.player.name} is yours for ${fmt(s.last_result.price)} :)`, 'success');
     if (prev.owner_id !== s.owner_id && s.owner_id === me.teamId) toast('You are now the auctioneer');
+    if (prev.phase !== 'lobby' && prev.settings.bid_timer !== s.settings.bid_timer && s.owner_id !== me.teamId)
+        toast(`Bid timer is now ${s.settings.bid_timer} seconds`);
 }
 
 // ------------------------------------------------------------------ screens and tabs
@@ -544,7 +624,6 @@ function showScreen(name) {
     if (!inRoom) { $('#hdr-team').textContent = ''; renderResume(); }
 }
 function setPane(p) {
-    pane = p;
     $$('.tab').forEach(t => t.classList.toggle('on', t.dataset.pane === p));
     $$('[data-pane-body]').forEach(b => { b.hidden = b.dataset.paneBody !== p; });
     window.scrollTo({ top: 0 });
@@ -557,7 +636,7 @@ function render(prev) {
     $('#hdr-code').textContent = S.code;
     $('#hdr-team').textContent = mine.team + (S.owner_id === me.teamId ? ' (auctioneer)' : '');
     if (S.phase === 'lobby') { showScreen('lobby'); renderLobby(); }
-    else if (S.phase === 'finished') { showScreen('results'); renderResults(prev); }
+    else if (S.phase === 'finished') { showScreen('results'); renderResults(); }
     else { if (screen !== 'auction') setPane('floor'); showScreen('auction'); renderAuction(prev); }
 }
 
@@ -651,31 +730,64 @@ const SETTINGS = [
     { key: 'team_purse', label: 'Purse', opts: [50, 90, 100, 120, 150], show: v => `₹${v} Cr` },
     { key: 'squad_size', label: 'Squad size', opts: Array.from({ length: 21 }, (_, i) => i + 5), show: v => plural(v, 'player') },
     { key: 'max_teams', label: 'Max teams', opts: Array.from({ length: 11 }, (_, i) => i + 2), show: v => `${v}` },
-    { key: 'bid_timer', label: 'Bid timer', opts: [10, 15, 20, 30], show: v => `${v} seconds` },
+    { key: 'bid_timer', label: 'Bid timer', timer: true, show: v => `${v} seconds` },
+    { key: 'break_seconds', label: 'Break between batches', opts: [10, 15, 20, 30, 45, 60], show: v => `${v} seconds` },
 ];
 
-function renderLobby() {
+async function setSetting(key, value) {
+    const res = await call('update_settings', { [key]: value });
+    if (!res.ok) { toast(res.error, 'error'); if (S) renderLobby(true); }
+}
+
+function timerPicker(value) {
+    const preset = TIMER_PRESETS.includes(value);
+    return `<div class="pills" data-timer-picker>
+        ${TIMER_PRESETS.map(v => `<button type="button" class="pill ${v === value ? 'on' : ''}" data-v="${v}">${v}s</button>`).join('')}
+        <label class="pill custom ${preset ? '' : 'on'}" title="Any value from ${TIMER_MIN} to ${TIMER_MAX} seconds">
+            <input type="number" inputmode="numeric" min="${TIMER_MIN}" max="${TIMER_MAX}" placeholder="Other" value="${preset ? '' : value}">s</label>
+    </div>`;
+}
+
+function renderLobby(force = false) {
     const owner = S.owner_id === me.teamId;
     $('#lobby-code').textContent = S.code;
     $('#lobby-count').textContent = `${S.teams.length} of ${S.settings.max_teams}`;
     $('#lobby-teams').innerHTML = S.teams.map((t, i) => `
-        <li><span class="no">${String(i + 1).padStart(2, '0')}</span>
-            <span><span class="tn">${esc(t.team)}</span><br><span class="tag">${esc(t.name)}${t.is_owner ? ' &middot; auctioneer' : ''}${t.id === me.teamId ? ' &middot; you' : ''}</span></span>
-            <span class="st ${t.connected ? 'green' : 'faint'}">${t.connected ? 'here' : 'away'}</span></li>`).join('')
-        + (S.teams.length < 2 ? `<li><span class="no"></span><span class="faint">Waiting for others. Send them the code.</span></li>` : '');
+        <li class="${t.id === me.teamId ? 'me' : ''}">
+            <span class="badge" style="background:${TEAM_COLORS[i % TEAM_COLORS.length]}">${esc(t.team.charAt(0).toUpperCase())}</span>
+            <span style="min-width:0"><div class="tn">${esc(t.team)}</div><div class="tag">${esc(t.name)}${t.is_owner ? ' &middot; auctioneer' : ''}${t.id === me.teamId ? ' &middot; you' : ''}</div></span>
+            <span class="st ${t.connected ? 'on' : ''}" title="${t.connected ? 'here' : 'away'}"></span></li>`).join('')
+        + (S.teams.length < 2 ? `<li class="wait">Waiting for others. Send them the code.</li>` : '');
 
     const form = $('#settings-form');
-    if (!form.contains(document.activeElement)) {
-        form.innerHTML = SETTINGS.map(d => owner
-            ? `<label class="field" style="margin-bottom:12px"><span class="caps">${d.label}</span><select class="input" data-setting="${d.key}">
-                ${d.opts.map(o => `<option value="${o}" ${String(S.settings[d.key]) === String(o) ? 'selected' : ''}>${esc(d.show(o))}</option>`).join('')}</select></label>`
-            : `<div class="kv"><span class="muted">${d.label}</span><b>${esc(d.show(S.settings[d.key]))}</b></div>`).join('');
-        $$('select', form).forEach(sel => sel.addEventListener('change', async () => {
+    const typing = form.contains(document.activeElement) && document.activeElement.matches('input, select');
+    if (force || !typing) {
+        form.innerHTML = SETTINGS.map(d => {
+            if (!owner) return `<div class="kv"><span class="muted">${d.label}</span><b>${esc(d.show(S.settings[d.key]))}</b></div>`;
+            if (d.timer) return `<div class="field"><span class="caps">${d.label}</span>${timerPicker(S.settings.bid_timer)}
+                <p class="hint" style="margin-top:6px">Resets on every bid. You can also change it during the auction.</p></div>`;
+            return `<label class="field"><span class="caps">${d.label}</span><select class="input" data-setting="${d.key}">
+                ${d.opts.map(o => `<option value="${o}" ${String(S.settings[d.key]) === String(o) ? 'selected' : ''}>${esc(d.show(o))}</option>`).join('')}</select></label>`;
+        }).join('');
+        $$('select', form).forEach(sel => sel.addEventListener('change', () => {
             const k = sel.dataset.setting;
-            const res = await call('update_settings', { [k]: k === 'auction_order' ? sel.value : Number(sel.value) });
-            if (!res.ok) toast(res.error, 'error');
+            setSetting(k, k === 'auction_order' ? sel.value : Number(sel.value));
             sel.blur();
         }));
+        const picker = $('[data-timer-picker]', form);
+        if (picker) {
+            $$('button[data-v]', picker).forEach(b => b.addEventListener('click', () => { b.blur(); setSetting('bid_timer', Number(b.dataset.v)); }));
+            const inp = $('input', picker);
+            const submit = () => {
+                const v = Math.round(Number(inp.value));
+                if (!inp.value) return;
+                if (!(v >= TIMER_MIN && v <= TIMER_MAX)) { toast(`Pick a time between ${TIMER_MIN} and ${TIMER_MAX} seconds`, 'error'); return; }
+                setSetting('bid_timer', v);
+                inp.blur();
+            };
+            inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); submit(); } });
+            inp.addEventListener('change', submit);
+        }
     }
     $('#settings-note').textContent = owner ? 'you set these' : 'set by the auctioneer';
     $('#pool-size').textContent = plural(S.pool_size, 'player');
@@ -685,7 +797,7 @@ function renderLobby() {
         + `<p class="hint">${tiered ? 'Top is rated 85+, mid is 72 to 84, low is under 72.' : 'This order runs everyone as one batch.'}</p>`;
     $('#lobby-start').innerHTML = owner
         ? `<button id="btn-start" class="btn wide">Start the auction</button><p class="hint" style="text-align:center">${S.teams.length < 2 ? 'You can start alone to try it out.' : plural(S.teams.length, 'team') + ' in the room'}</p>`
-        : `<p class="muted" style="border:1px dashed var(--ink);padding:14px;text-align:center;margin:0">Waiting for the auctioneer to start...</p>`;
+        : `<p class="waiting">Waiting for the auctioneer to start...</p>`;
     const b = $('#btn-start');
     if (b) b.onclick = async () => { busy(b, true, 'Starting...'); const r = await call('start_auction'); if (!r.ok) { busy(b, false); toast(r.error, 'error'); } };
 }
@@ -724,7 +836,7 @@ function renderLot(prev) {
         el.innerHTML = `
             <div class="lot-head"><span class="caps">Lot ${S.lot_number}</span><span class="caps faint" style="margin-left:auto">${batchLine()}</span></div>
             <div class="stamp-wrap">
-                <div class="caps" style="margin-bottom:22px">${esc(r.player.name)}</div>
+                <div class="caps" style="margin-bottom:24px">${esc(r.player.name)}</div>
                 <div class="stamp ${r.sold ? 'sold' : 'unsold'}">${r.sold ? 'SOLD' : 'UNSOLD'}</div>
                 <div class="stamp-sub">${r.sold
                     ? `<span class="mono">${fmt(r.price)}</span>to <b>${esc(r.winner)}</b>${r.winner_id === me.teamId ? ' (you)' : ''}`
@@ -748,7 +860,7 @@ function renderLot(prev) {
     const p = lot.player;
     const fresh = !prev || prev.lot?.lot_id !== lot.lot_id;
     const bumped = !fresh && prev.lot?.bid !== lot.bid;
-    if (fresh || bumped || !lotClock || prev?.paused !== S.paused) {
+    if (fresh || bumped || !lotClock || prev?.paused !== S.paused || prev?.settings.bid_timer !== S.settings.bid_timer) {
         lotClock = { endsAt: performance.now() + lot.remaining_ms, total: S.settings.bid_timer * 1000, paused: S.paused, frozen: lot.remaining_ms };
     }
     const mineLeads = lot.bidder_id === me.teamId;
@@ -758,13 +870,20 @@ function renderLot(prev) {
             <h2 class="lot-name">${esc(p.name)}</h2>
             <div class="lot-meta">${role(p.role)}<span>${esc(p.role)}</span><span>${esc(p.nationality)}</span><span>Rating <b class="mono">${p.overall}</b></span><span>Base <b class="mono">${fmt(p.base)}</b></span></div>
         </div>
-        <div class="board ${mineLeads ? 'mine' : ''} ${bumped ? 'flash' : ''}">
-            <div><div class="caps">${lot.bid === null ? 'Opens at' : 'Current bid'}</div><div class="big">${fmt(lot.bid ?? p.base)}</div></div>
-            <div><div class="caps">${lot.bidder ? 'Held by' : 'No bids yet'}</div><div class="who">${lot.bidder ? esc(lot.bidder) + (mineLeads ? ' <span class="caps green">you</span>' : '') : '<span class="faint">&mdash;</span>'}</div></div>
+        <div class="board ${mineLeads ? 'mine' : ''}">
+            <div class="${bumped ? 'flash' : ''}"><div class="caps">${lot.bid === null ? 'Opens at' : 'Current bid'}</div><div class="big">${fmt(lot.bid ?? p.base)}</div></div>
+            <div class="${bumped ? 'flash' : ''}"><div class="caps">${lot.bidder ? 'Held by' : 'No bids yet'}</div><div class="who">${lot.bidder ? esc(lot.bidder) + (mineLeads ? ' <span class="caps green">you</span>' : '') : '<span class="faint">&mdash;</span>'}</div></div>
         </div>
         <div class="clock" id="clock"><div class="track"><div class="fill" id="clock-fill"></div></div><div class="secs" id="clock-secs">-</div></div>
         ${lot.history.length ? `<div class="history"><div class="caps">Bids</div><ol>${[...lot.history].reverse().map(h =>
             `<li><span class="amt">${fmt(h.amount)}</span><span>${esc(h.team)}${h.team_id === me.teamId ? ' (you)' : ''}</span></li>`).join('')}</ol></div>` : ''}`;
+}
+
+async function ownerAction(action, extra = {}, btn = null) {
+    if (btn) btn.disabled = true;
+    const res = await call('owner_action', { action, ...extra });
+    if (!res.ok) { toast(res.error, 'error'); if (btn) btn.disabled = false; }
+    return res;
 }
 
 function renderGavel() {
@@ -774,6 +893,7 @@ function renderGavel() {
     const hasBid = bidding && S.lot && S.lot.bidder_id;
     const b = S.batches[S.batch_idx];
     const brk = S.phase === 'batch_break';
+    const t = S.settings.bid_timer;
     box.innerHTML = `<div class="gavel"><span class="caps">Auctioneer</span>
         ${brk ? `<button class="btn sm" data-act="next_batch">Start ${esc(S.pending_batch)} now</button>
                  <button class="btn ghost sm" data-act="skip_batch" data-confirm="Skip the whole ${esc(S.pending_batch)} batch?">Skip this batch</button>`
@@ -781,12 +901,15 @@ function renderGavel() {
                  <button class="btn ghost sm" data-act="sell_now" ${hasBid ? '' : 'disabled'}>Sell now</button>
                  <button class="btn ghost sm" data-act="skip_player" ${bidding ? '' : 'disabled'} ${hasBid ? 'data-confirm="Skip this player and throw away the bids?"' : ''}>Skip player</button>
                  <button class="btn ghost sm" data-act="skip_batch" data-confirm="Skip the rest of ${esc(b?.name || 'this batch')}? They go to the unsold pool.">Skip batch</button>`}
+        <span class="stepper" title="Bid timer"><button data-timer="-5" ${t <= TIMER_MIN ? 'disabled' : ''} aria-label="Shorter timer">&minus;</button><b>${t}s</b><button data-timer="5" ${t >= TIMER_MAX ? 'disabled' : ''} aria-label="Longer timer">+</button></span>
         <button class="btn danger sm push" data-act="end" data-confirm="End the auction now? Squads become final.">End auction</button></div>`;
-    $$('[data-act]', box).forEach(btn => btn.onclick = async () => {
+    $$('[data-act]', box).forEach(btn => btn.onclick = () => {
         if (btn.dataset.confirm && !confirm(btn.dataset.confirm)) return;
-        btn.disabled = true;
-        const res = await call('owner_action', { action: btn.dataset.act });
-        if (!res.ok) { toast(res.error, 'error'); btn.disabled = false; }
+        ownerAction(btn.dataset.act, {}, btn);
+    });
+    $$('[data-timer]', box).forEach(btn => btn.onclick = () => {
+        const v = Math.min(TIMER_MAX, Math.max(TIMER_MIN, S.settings.bid_timer + Number(btn.dataset.timer)));
+        ownerAction('set_timer', { value: v }, btn);
     });
 }
 
@@ -794,7 +917,7 @@ function renderStandings() {
     const lead = S.lot && S.lot.bidder_id;
     $('#standings').innerHTML = `<thead><tr><th>Team</th><th class="num">Squad</th><th class="num">Spent</th><th class="num">Left</th></tr></thead><tbody>`
         + S.teams.map(t => `<tr class="${t.id === me.teamId ? 'me' : ''} ${t.id === lead ? 'lead' : ''} ${t.connected ? '' : 'away'}">
-            <td><span style="color:${tColor(t.id)}">&#9632;</span> ${esc(t.team)}${t.is_owner ? ' <span class="faint">(A)</span>' : ''}${t.connected ? '' : ' <span class="faint">away</span>'}</td>
+            <td><span class="dot" style="background:${tColor(t.id)}"></span>${esc(t.team)}${t.is_owner ? ' <span class="faint">(A)</span>' : ''}${t.connected ? '' : ' <span class="faint">away</span>'}</td>
             <td class="num">${t.squad.length}/${S.settings.squad_size}</td><td class="num">${fmt(t.spent)}</td><td class="num">${fmt(t.purse_left)}</td></tr>`).join('') + '</tbody>';
 }
 
@@ -813,28 +936,31 @@ function renderUpNext() {
 function roleBar(t) {
     const n = t.squad.length;
     const segs = n ? ROLES.filter(r => t.roles[r]).map(r =>
-        `<i style="width:${t.roles[r] / n * 100}%;background:${ROLE_COLOR[r]}" title="${r}: ${t.roles[r]}">${t.roles[r]}</i>`).join('') : '';
-    return `<div class="rolebar">${segs}</div><div class="legend">${ROLES.map(r => `<span style="--c:${ROLE_COLOR[r]}">${r} <b class="mono">${t.roles[r] || 0}</b></span>`).join('')}</div>`;
+        `<i style="flex:${t.roles[r]};background:${ROLE_COLOR[r]}" title="${r}: ${t.roles[r]}"></i>`).join('') : '';
+    return `<div class="rolebar">${segs}</div><div class="legend">${ROLES.map(r =>
+        `<span><span class="dot" style="background:${ROLE_COLOR[r]};margin-right:6px"></span>${r} <b class="mono">${t.roles[r] || 0}</b></span>`).join('')}</div>`;
 }
-function squadTable(t, emptyText) {
+function squadTable(t, emptyText, showNation = true) {
     const rows = [...t.squad].sort((a, b) => b.price - a.price);
     if (!rows.length) return `<div class="empty">${emptyText}</div>`;
     return `<table class="t"><thead><tr><th>Player</th><th></th><th class="num">Rating</th><th class="num">Price</th></tr></thead><tbody>${rows.map(p =>
-        `<tr><td>${esc(p.name)} <span class="faint" style="font-size:12px">${esc(p.nationality)}</span></td><td>${role(p.role)}</td><td class="num">${p.overall}</td><td class="num">${fmt(p.price)}</td></tr>`).join('')}</tbody></table>`;
+        `<tr><td>${esc(p.name)}${showNation ? ` <span class="faint" style="font-size:12px">${esc(p.nationality)}</span>` : ''}</td><td>${role(p.role)}</td><td class="num">${p.overall}</td><td class="num">${fmt(p.price)}</td></tr>`).join('')}</tbody></table>`;
 }
+const fig = (label, value, sub = '', cls = '') =>
+    `<div class="figure"><div class="caps">${label}</div><div class="v ${cls}">${value}</div><div class="sub">${sub || '&nbsp;'}</div></div>`;
 
 function renderMySquad() {
     const t = S.teams.find(x => x.id === me.teamId);
     $('#my-squad').innerHTML = `
-        <div class="h-section"><h2>${esc(t.team)}</h2><span class="aside">${esc(t.name)}</span></div>
+        <div class="card-title" style="margin:0"><h2 style="font-size:26px">${esc(t.team)}</h2><span class="aside">${esc(t.name)}</span></div>
         <div class="figures">
-            <div><div class="caps">Players</div><div class="v">${t.squad.length}<span class="faint" style="font-size:15px">/${S.settings.squad_size}</span></div></div>
-            <div><div class="caps">Spent</div><div class="v">${fmt(t.spent)}</div></div>
-            <div><div class="caps">Purse left</div><div class="v green">${fmt(t.purse_left)}</div></div>
-            <div><div class="caps">Slots left</div><div class="v">${t.slots_left}</div></div>
+            ${fig('Players', `${t.squad.length}<span class="faint" style="font-size:15px">/${S.settings.squad_size}</span>`, plural(t.slots_left, 'slot') + ' left')}
+            ${fig('Spent', fmt(t.spent))}
+            ${fig('Purse left', fmt(t.purse_left), '', 'green')}
+            ${fig('Avg rating', t.squad.length ? avg(t.squad.map(p => p.overall)).toFixed(1) : '&mdash;')}
         </div>
-        ${roleBar(t)}
-        ${squadTable(t, 'Nothing here yet. Win a bid :)')}`;
+        <div class="card"><div class="card-title"><h2>Make-up</h2></div>${roleBar(t)}</div>
+        <div class="card"><div class="card-title"><h2>Players</h2></div>${squadTable(t, 'Nothing here yet. Win a bid :)')}</div>`;
 }
 
 const openTeams = new Set();
@@ -843,9 +969,9 @@ function renderAllTeams() {
     $$('details', box).forEach(d => d.open ? openTeams.add(d.dataset.id) : openTeams.delete(d.dataset.id));
     box.innerHTML = S.teams.map(t => `
         <details class="team" data-id="${t.id}" ${openTeams.has(t.id) ? 'open' : ''}>
-            <summary><span class="tn">${esc(t.team)}${t.id === me.teamId ? ' <span class="caps green">you</span>' : ''}</span>
-                <span class="mono">${t.squad.length}/${S.settings.squad_size}</span><span class="mono hide-sm">${fmt(t.spent)} spent</span><span class="mono hide-sm">${fmt(t.purse_left)} left</span></summary>
-            <div>${roleBar(t)}${squadTable(t, 'No players yet')}</div>
+            <summary><span class="tn"><span class="dot" style="background:${tColor(t.id)}"></span>${esc(t.team)}${t.id === me.teamId ? ' <span class="caps green">you</span>' : ''}</span>
+                <span class="mono">${t.squad.length}/${S.settings.squad_size}</span><span class="mono hide-sm">${fmt(t.spent)} spent</span><span class="mono hide-sm">${fmt(t.purse_left)} left</span><span class="chev"></span></summary>
+            <div><div style="margin:12px 0 16px">${roleBar(t)}</div>${squadTable(t, 'No players yet')}</div>
         </details>`).join('');
 }
 
@@ -853,7 +979,7 @@ function renderBatches() {
     $('#sold-unsold').textContent = `${S.sold_count} sold, ${S.unsold_count} unsold`;
     $('#batches').innerHTML = S.batches.map(b => {
         const done = b.total - b.remaining;
-        return `<li class="${b.status}"><span class="bn">${esc(b.name)}</span><span class="mono" style="text-align:right">${done}/${b.total}</span>
+        return `<li class="${b.status}"><span class="bn">${esc(b.name)}</span><span class="mono">${done}/${b.total}</span>
             <div class="bar"><i style="width:${b.total ? done / b.total * 100 : 0}%"></i></div></li>`;
     }).join('');
 }
@@ -863,7 +989,7 @@ function renderLog() {
     $('#log').innerHTML = [...S.log].reverse().map(e => `<li><time>${hms(e.t)}</time><span class="k-${e.kind}">${esc(e.text)}</span></li>`).join('');
 }
 
-// ---- bid bar: pinned to the bottom, visible on every tab
+// ---- bid dock: floats at the bottom, visible on every tab
 function blockReason(mine) {
     const lot = S.lot;
     if (S.phase !== 'bidding' || !lot) return 'Bidding is closed';
@@ -927,7 +1053,7 @@ function tick() {
         const secs = Math.ceil(remain / 1000);
         const hot = secs <= 5 && !lotClock.paused;
         const fill = $('#clock-fill'); if (fill) fill.style.width = `${Math.min(100, remain / lotClock.total * 100)}%`;
-        const c = $('#clock'); if (c) c.classList.toggle('hot', hot);
+        const c = $('#clock'); if (c) { c.classList.toggle('hot', hot); c.classList.toggle('paused', lotClock.paused); }
         const cs = $('#clock-secs'); if (cs) cs.textContent = secs;
         const bs = $('#bb-secs'); if (bs) { bs.textContent = secs; bs.classList.toggle('hot', hot); }
     }
@@ -937,57 +1063,77 @@ function tick() {
 (function loop() { tick(); requestAnimationFrame(loop); })();
 
 // ------------------------------------------------------------------ results
-const charts = {};
-function destroyCharts() { Object.keys(charts).forEach(k => { charts[k].destroy(); delete charts[k]; }); }
-if (window.Chart) {
-    Chart.defaults.color = '#57534a';
-    Chart.defaults.font.family = "'IBM Plex Sans', system-ui, sans-serif";
-    Chart.defaults.borderColor = '#cfc6b1';
+function rankedTeams() {
+    return S.teams.map(t => ({ ...t, avgRating: avg(t.squad.map(p => p.overall)) }))
+        .sort((a, b) => (b.avgRating - a.avgRating) || (b.squad.length - a.squad.length) || (a.spent - b.spent));
 }
 
-function renderResults(prev) {
+function renderResults() {
     const st = S.stats || {};
-    const fig = (label, value, sub) => `<div><div class="caps">${label}</div><div class="v">${value}</div><div class="faint" style="font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${sub || '&nbsp;'}</div></div>`;
-    $('#res-figures').innerHTML =
-        fig('Top buy', st.most_expensive ? fmt(st.most_expensive.price) : '&mdash;', st.most_expensive ? `${esc(st.most_expensive.name)}, ${esc(st.most_expensive.team)}` : 'nobody bought anyone :(') +
-        fig('Players sold', st.total_sold ?? 0, `${S.unsold_count} unsold`) +
-        fig('Average price', fmt(st.average_price || 0)) +
-        fig('Total spent', fmt(st.total_spent || 0), plural(S.teams.length, 'team'));
+    const sales = salesInOrder();
+    const ranked = rankedTeams();
+    const purse = S.settings.team_purse * CR;
 
-    $('#res-teams').innerHTML = S.teams.map(t => `
-        <div>
-            <div class="h-section"><h2><span style="color:${tColor(t.id)}">&#9632;</span> ${esc(t.team)}</h2><span class="aside mono">${t.squad.length} &middot; ${fmt(t.spent)} &middot; ${fmt(t.purse_left)} left</span></div>
-            ${roleBar(t)}${squadTable(t, 'Bought nobody')}
+    $('#res-figures').innerHTML =
+        fig('Players sold', st.total_sold ?? 0, `${S.unsold_count} unsold`) +
+        fig('Total spent', fmt(st.total_spent || 0), `across ${plural(S.teams.length, 'team')}`) +
+        fig('Average price', fmt(st.average_price || 0), 'per player sold') +
+        fig('Top buy', st.most_expensive ? fmt(st.most_expensive.price) : '&mdash;',
+            st.most_expensive ? `${esc(st.most_expensive.name)}, ${esc(st.most_expensive.team)}` : 'nobody bought anyone :(');
+
+    $('#res-table').innerHTML = `<thead><tr><th style="width:44px">#</th><th>Team</th><th class="num">Players</th><th class="num">Avg rating</th><th class="num hide-sm">Spent</th><th class="num hide-sm">Left</th><th class="hide-sm">Best buy</th></tr></thead><tbody>`
+        + ranked.map((t, i) => {
+            const best = [...t.squad].sort((a, b) => b.overall - a.overall)[0];
+            return `<tr class="${t.id === me.teamId ? 'me' : ''}">
+                <td><span class="rank ${i === 0 && t.squad.length ? 'r1' : ''}">${i + 1}</span></td>
+                <td><span class="dot" style="background:${tColor(t.id)}"></span>${esc(t.team)}${t.id === me.teamId ? ' <span class="caps green">you</span>' : ''}</td>
+                <td class="num">${t.squad.length}/${S.settings.squad_size}</td>
+                <td class="num">${t.squad.length ? t.avgRating.toFixed(1) : '&mdash;'}</td>
+                <td class="num hide-sm">${fmt(t.spent)}</td><td class="num hide-sm">${fmt(t.purse_left)}</td>
+                <td class="hide-sm">${best ? `${esc(best.name)} <span class="faint mono" style="font-size:12px">${best.overall}</span>` : '<span class="faint">&mdash;</span>'}</td></tr>`;
+        }).join('') + '</tbody>';
+
+    $('#res-spend').innerHTML = [...S.teams].sort((a, b) => b.spent - a.spent).map(t => `
+        <div class="spend-row">
+            <span class="tn"><span class="dot" style="background:${tColor(t.id)}"></span>${esc(t.team)}</span>
+            <span class="mono" style="font-size:13px">${fmt(t.spent)} <span class="faint">of ${fmt(purse)}</span></span>
+            <div class="bar"><i style="width:${Math.min(100, t.spent / purse * 100)}%;background:${tColor(t.id)}"></i></div>
+        </div>`).join('');
+
+    const top = [...sales].sort((a, b) => b.price - a.price).slice(0, 6);
+    $('#res-top').innerHTML = top.length
+        ? `<thead><tr><th>Player</th><th class="num">Price</th></tr></thead><tbody>${top.map(p =>
+            `<tr><td>${esc(p.name)} ${role(p.role)}<div class="faint" style="font-size:12px">${esc(p.team)}</div></td><td class="num">${fmt(p.price)}</td></tr>`).join('')}</tbody>`
+        : '<tbody><tr><td class="empty">No sales</td></tr></tbody>';
+
+    const steals = sales.filter(p => p.base && p.price <= p.base * 1.25).sort((a, b) => (b.overall - a.overall) || (a.price - b.price)).slice(0, 6);
+    $('#res-steals').innerHTML = steals.length
+        ? `<thead><tr><th>Player</th><th class="num">Rating</th><th class="num hide-sm">Base</th><th class="num">Paid</th></tr></thead><tbody>${steals.map(p =>
+            `<tr><td>${esc(p.name)} ${role(p.role)}<div class="faint" style="font-size:12px">${esc(p.team)}</div></td><td class="num">${p.overall}</td><td class="num hide-sm">${fmt(p.base)}</td><td class="num">${fmt(p.price)}</td></tr>`).join('')}</tbody>`
+        : '<tbody><tr><td class="empty">Every sale went well above base price</td></tr></tbody>';
+    $('#res-steals').closest('.card').hidden = !sales.length;
+
+    $('#res-teams').innerHTML = ranked.map((t, i) => `
+        <div class="card team-card">
+            <div class="head">
+                <span class="badge" style="background:${tColor(t.id)}">${esc(t.team.charAt(0).toUpperCase())}</span>
+                <div style="min-width:0"><div class="tn">${esc(t.team)}</div><div class="meta">${esc(t.name)} &middot; ranked ${i + 1} of ${S.teams.length}${t.id === me.teamId ? ' &middot; you' : ''}</div></div>
+            </div>
+            <div class="nums">
+                <div><div class="caps">Players</div><div class="v">${t.squad.length}</div></div>
+                <div><div class="caps">Spent</div><div class="v">${fmt(t.spent)}</div></div>
+                <div><div class="caps">Left</div><div class="v">${fmt(t.purse_left)}</div></div>
+            </div>
+            <div style="margin-bottom:16px">${roleBar(t)}</div>
+            ${squadTable(t, 'Bought nobody', false)}
         </div>`).join('');
 
     const unsold = S.unsold || [];
     const u = $('#res-unsold');
     u.hidden = !unsold.length;
-    $('.tn', u).textContent = `Unsold (${unsold.length})`;
-    $('table', u).innerHTML = `<thead><tr><th>Player</th><th></th><th class="num">Rating</th><th class="num">Base</th></tr></thead><tbody>${unsold.map(p =>
+    $('.tn', u).textContent = `Unsold players (${unsold.length})`;
+    $('table', u).innerHTML = `<thead><tr><th>Player</th><th></th><th class="num">Rating</th><th class="num">Base</th></tr></thead><tbody>${[...unsold].sort((a, b) => b.overall - a.overall).map(p =>
         `<tr><td>${esc(p.name)}</td><td>${role(p.role)}</td><td class="num">${p.overall}</td><td class="num">${fmt(p.base)}</td></tr>`).join('')}</tbody>`;
-
-    if (!window.Chart || (prev && prev.phase === 'finished' && charts.spend)) return;
-    destroyCharts();
-    const labels = S.teams.map(t => t.team);
-    const opts = (ticks) => ({
-        responsive: true, maintainAspectRatio: false,
-        plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, boxHeight: 10 } } },
-        scales: { x: { stacked: true, grid: { display: false } }, y: { stacked: true, beginAtZero: true, ticks } },
-    });
-    charts.spend = new Chart($('#chart-spend'), {
-        type: 'bar',
-        data: { labels, datasets: [
-            { label: 'Spent', data: S.teams.map(t => toCr(t.spent)), backgroundColor: S.teams.map(t => tColor(t.id)) },
-            { label: 'Left', data: S.teams.map(t => toCr(t.purse_left)), backgroundColor: '#e2dac8' },
-        ] },
-        options: opts({ callback: v => `${v} Cr` }),
-    });
-    charts.roles = new Chart($('#chart-roles'), {
-        type: 'bar',
-        data: { labels, datasets: ROLES.map(r => ({ label: r, data: S.teams.map(t => t.roles[r] || 0), backgroundColor: ROLE_COLOR[r] })) },
-        options: opts({ precision: 0 }),
-    });
 }
 
 // ------------------------------------------------------------------ export
@@ -998,17 +1144,17 @@ function sheetName(name, used) {
     used.add(c.toLowerCase());
     return c;
 }
-const salesInOrder = () => S.teams.flatMap(t => t.squad.map(p => ({ ...p, team: t.team }))).sort((a, b) => a.seq - b.seq);
+function salesInOrder() { return S.teams.flatMap(t => t.squad.map(p => ({ ...p, team: t.team }))).sort((a, b) => a.seq - b.seq); }
 
 function exportExcel() {
     if (typeof XLSX === 'undefined') return toast('The Excel library did not load. Try JSON.', 'error');
     const wb = XLSX.utils.book_new();
     const used = new Set(['summary', 'all sales', 'unsold']);
     const add = (rows, name) => XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rows), name);
-    add([['Team', 'Manager', 'Players', 'Spent (Cr)', 'Purse left (Cr)', ...ROLES],
-        ...S.teams.map(t => [t.team, t.name, t.squad.length, toCr(t.spent), toCr(t.purse_left), ...ROLES.map(r => t.roles[r] || 0)])], 'Summary');
-    add([['#', 'Player', 'Role', 'Nationality', 'Rating', 'Team', 'Price (Cr)', 'Price'],
-        ...salesInOrder().map(s => [s.seq, s.name, s.role, s.nationality, s.overall, s.team, toCr(s.price), fmt(s.price)])], 'All sales');
+    add([['Rank', 'Team', 'Manager', 'Players', 'Avg rating', 'Spent (Cr)', 'Purse left (Cr)', ...ROLES],
+        ...rankedTeams().map((t, i) => [i + 1, t.team, t.name, t.squad.length, t.squad.length ? Number(t.avgRating.toFixed(1)) : '', toCr(t.spent), toCr(t.purse_left), ...ROLES.map(r => t.roles[r] || 0)])], 'Summary');
+    add([['#', 'Player', 'Role', 'Nationality', 'Rating', 'Team', 'Base (Cr)', 'Price (Cr)', 'Price'],
+        ...salesInOrder().map(s => [s.seq, s.name, s.role, s.nationality, s.overall, s.team, toCr(s.base), toCr(s.price), fmt(s.price)])], 'All sales');
     S.teams.forEach(t => add([
         ['Player', 'Role', 'Nationality', 'Rating', 'Price (Cr)', 'Price'],
         ...[...t.squad].sort((a, b) => a.seq - b.seq).map(p => [p.name, p.role, p.nationality, p.overall, toCr(p.price), fmt(p.price)]),
@@ -1022,7 +1168,7 @@ function exportJSON() {
     const out = {
         room: S.code, exported_at: new Date().toISOString(), status: S.phase, settings: S.settings,
         teams: S.teams.map(t => ({ team: t.team, manager: t.name, spent_cr: toCr(t.spent), purse_left_cr: toCr(t.purse_left), roles: t.roles,
-            squad: t.squad.map(p => ({ name: p.name, role: p.role, nationality: p.nationality, overall: p.overall, price_cr: toCr(p.price), price: fmt(p.price) })) })),
+            squad: t.squad.map(p => ({ name: p.name, role: p.role, nationality: p.nationality, overall: p.overall, base_cr: toCr(p.base), price_cr: toCr(p.price), price: fmt(p.price) })) })),
         unsold: (S.unsold || []).map(p => ({ name: p.name, role: p.role, overall: p.overall })),
     };
     const a = document.createElement('a');

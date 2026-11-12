@@ -4,10 +4,10 @@ A real-time cricket player auction for a group of friends. One person opens a ro
 
 ## How it works
 
-- **Rooms.** The creator is the auctioneer. Rules (purse, squad size, max teams, bid timer, order) are set in the lobby and lock when the auction starts.
+- **Rooms.** The creator is the auctioneer. Rules (purse, squad size, max teams, bid timer, break between batches, order) are set in the lobby and lock when the auction starts. The bid timer takes any value from 5 to 120 seconds, and the auctioneer can also change it during the auction.
 - **Batches.** With the default order, players are split into Top (85+ rating), Mid (72 to 84) and Low (under 72). Between batches there is a short interval. The auctioneer can skip the rest of a batch or skip the next one. Unsold players get one more round at the end.
 - **Bidding.** The first bid on a player is at the base price; after that it is +50L or +1 Cr. Every bid resets the clock. You cannot bid more than your purse, bid when your squad is full, or outbid yourself.
-- **Auctioneer controls.** Pause and resume, sell now, skip player, skip batch, end auction.
+- **Auctioneer controls.** Pause and resume, sell now, skip player, skip batch, change the bid timer, end auction.
 - **Export.** Excel (summary, all sales, one sheet per team, unsold) or JSON, both during and after the auction.
 
 ## Under the hood

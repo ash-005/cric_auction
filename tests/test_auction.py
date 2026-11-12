@@ -247,7 +247,7 @@ def test_batch_break_auto_continues():
     room, (a, b) = room_with_teams(players=tiered_players())
     started(room, a)
     room.owner_action(a['id'], 'skip_batch', 1)
-    room.tick(1 + server.BATCH_BREAK_SECONDS)
+    room.tick(1 + room.settings['break_seconds'])
     assert room.phase == 'bidding'
 
 
@@ -526,3 +526,46 @@ def test_random_auctions_keep_invariants(seed):
     assert room.phase == 'finished'
     snap = room.snapshot(now)
     assert snap['stats']['total_sold'] == sum(len(t['squad']) for t in teams)
+
+
+# ---------------------------------------------------------------- timer
+def test_custom_timer_in_lobby():
+    room, (a, b) = room_with_teams()
+    room.update_settings(a['id'], {'bid_timer': 42, 'break_seconds': 9})
+    assert room.settings['bid_timer'] == 42 and room.settings['break_seconds'] == 9
+    for bad in (4, 121, 'x'):
+        with pytest.raises(AuctionError):
+            room.update_settings(a['id'], {'bid_timer': bad})
+
+
+def test_set_timer_mid_auction():
+    room, (a, b) = room_with_teams(bid_timer=30)
+    lot = started(room, a)                       # deadline 30
+    room.owner_action(a['id'], 'set_timer', 10, value=8)
+    assert room.settings['bid_timer'] == 8
+    assert lot['deadline'] == pytest.approx(18)  # shortened to now + 8
+    room.owner_action(a['id'], 'set_timer', 11, value=60)
+    assert lot['deadline'] == pytest.approx(18)  # never lengthens a running clock
+    room.bid(b['id'], lot['lot_id'], room.pool[lot['pid']]['base'], 12)
+    assert lot['deadline'] == pytest.approx(72)  # next bid uses the new timer
+    with pytest.raises(AuctionError):
+        room.owner_action(b['id'], 'set_timer', 13, value=20)
+    with pytest.raises(AuctionError):
+        room.owner_action(a['id'], 'set_timer', 13, value=500)
+
+
+def test_set_timer_while_paused_caps_remaining():
+    room, (a, b) = room_with_teams(bid_timer=30)
+    started(room, a)
+    room.owner_action(a['id'], 'pause', 2)       # 28s left
+    room.owner_action(a['id'], 'set_timer', 3, value=10)
+    assert room.paused_remaining == 10
+
+
+def test_set_timer_over_socket(clients):
+    owner = clients()
+    owner.emit('create_room', {'name': 'A', 'team': 'A'}, callback=True)
+    owner.emit('start_auction', {}, callback=True)
+    r = owner.emit('owner_action', {'action': 'set_timer', 'value': 25}, callback=True)
+    assert r['ok']
+    assert last_state(owner)['settings']['bid_timer'] == 25
