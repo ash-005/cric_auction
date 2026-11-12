@@ -28,7 +28,7 @@ import uuid
 from collections import deque
 
 from flask import Flask, render_template, request
-from flask_socketio import SocketIO, emit, join_room, leave_room
+from flask_socketio import SocketIO, join_room, leave_room
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'cricket_auction_secret')
@@ -401,6 +401,7 @@ class Room:
                 'bidder': None,
                 'deadline': now + self.settings['bid_timer'],
                 'bids': 0,
+                'history': [],
             }
             self.phase = 'bidding'
             self.paused = False
@@ -496,6 +497,7 @@ class Room:
         lot['bid'] = amount
         lot['bidder'] = team_id
         lot['bids'] += 1
+        lot['history'].append({'team_id': team_id, 'team': team['team'], 'amount': amount, 't': now})
         lot['deadline'] = now + self.settings['bid_timer']
 
     def owner_action(self, team_id, action, now):
@@ -607,6 +609,7 @@ class Room:
                 'bidder_id': self.lot['bidder'],
                 'bidder': bidder['team'] if bidder else None,
                 'bids': self.lot['bids'],
+                'history': self.lot['history'][-8:],
                 'remaining_ms': int(remaining * 1000),
                 'next_bids': ([self.pool[self.lot['pid']]['base']] if self.lot['bid'] is None
                               else [self.lot['bid'] + inc for inc in BID_INCREMENTS]),
@@ -640,6 +643,7 @@ class Room:
             'last_result': self.last_result if self.phase == 'sold_pause' else None,
             'batches': batches,
             'batch_idx': self.batch_idx,
+            'lot_number': self.lot_seq,
             'pending_batch': self.batches[self.pending_batch]['name'] if self.pending_batch is not None else None,
             'upcoming': upcoming,
             'pool_size': len(self.pool),
@@ -829,9 +833,8 @@ def on_create_room(data):
     except AuctionError as exc:
         rooms.pop(code, None)
         return {'ok': False, 'error': str(exc)}
-    emit('state', snap)
     return {'ok': True, 'room_code': code, 'team_id': team['id'], 'token': team['token'],
-            'players_loaded': len(players), 'skipped_rows': skipped}
+            'players_loaded': len(players), 'skipped_rows': skipped, 'state': snap}
 
 
 @socketio.on('join_room')
@@ -852,7 +855,7 @@ def on_join_room(data):
     except AuctionError as exc:
         return {'ok': False, 'error': str(exc)}
     broadcast(room, snap)
-    return {'ok': True, 'room_code': code, 'team_id': team['id'], 'token': team['token']}
+    return {'ok': True, 'room_code': code, 'team_id': team['id'], 'token': team['token'], 'state': snap}
 
 
 @socketio.on('rejoin')
@@ -874,7 +877,7 @@ def on_rejoin(data):
         room.last_active = now
         snap = room.snapshot(now)
     broadcast(room, snap)
-    return {'ok': True, 'room_code': code, 'team_id': team['id'], 'token': team['token']}
+    return {'ok': True, 'room_code': code, 'team_id': team['id'], 'token': team['token'], 'state': snap}
 
 
 def _leave_current(sid):

@@ -351,3 +351,178 @@ def test_concurrent_bids_threads():
         t.join()
     assert accepted == sorted(accepted) and len(set(accepted)) == len(accepted)
     assert room.lot['bid'] == accepted[-1]
+
+
+# ---------------------------------------------------------------- room lifecycle (sockets)
+def test_rooms_are_isolated(clients):
+    a1, a2, b1, b2 = clients(), clients(), clients(), clients()
+    ra = a1.emit('create_room', {'name': 'A', 'team': 'A1'}, callback=True)
+    rb = b1.emit('create_room', {'name': 'B', 'team': 'B1'}, callback=True)
+    assert ra['room_code'] != rb['room_code']
+    a2.emit('join_room', {'room_code': ra['room_code'], 'name': 'x', 'team': 'A2'}, callback=True)
+    b2.emit('join_room', {'room_code': rb['room_code'], 'name': 'y', 'team': 'B2'}, callback=True)
+    b1.get_received(); b2.get_received()
+    assert a1.emit('start_auction', {}, callback=True)['ok']
+    lot = last_state(a2)['lot']
+    assert a2.emit('place_bid', {'lot_id': lot['lot_id'], 'amount': lot['next_bids'][0]}, callback=True)['ok']
+    # Room B saw nothing and is still in the lobby
+    assert last_state(b1) is None
+    assert server.rooms[rb['room_code']].phase == 'lobby'
+    # A team in room B cannot bid into room A's lot
+    r = b2.emit('place_bid', {'lot_id': lot['lot_id'], 'amount': lot['next_bids'][0] + 50}, callback=True)
+    assert not r['ok']
+
+
+def test_join_errors(clients):
+    owner, c = clients(), clients()
+    assert not c.emit('join_room', {'room_code': 'NOPE1', 'name': 'x'}, callback=True)['ok']
+    code = owner.emit('create_room', {'name': 'A', 'team': 'A'}, callback=True)['room_code']
+    assert owner.emit('update_settings', {'max_teams': 2}, callback=True)['ok']
+    assert clients().emit('join_room', {'room_code': code, 'name': 'b', 'team': 'B'}, callback=True)['ok']
+    full = c.emit('join_room', {'room_code': code, 'name': 'c', 'team': 'C'}, callback=True)
+    assert not full['ok'] and 'full' in full['error']
+    assert not c.emit('join_room', {'room_code': code, 'name': '', 'team': 'D'}, callback=True)['ok']
+
+
+def test_lobby_leave_transfers_owner_and_last_out_deletes_room(clients):
+    owner, guest = clients(), clients()
+    ack = owner.emit('create_room', {'name': 'A', 'team': 'A'}, callback=True)
+    code = ack['room_code']
+    g = guest.emit('join_room', {'room_code': code, 'name': 'b', 'team': 'B'}, callback=True)
+    owner.emit('leave_room', {}, callback=True)
+    room = server.rooms[code]
+    assert ack['team_id'] not in room.teams and room.owner_id == g['team_id']
+    guest.emit('leave_room', {}, callback=True)
+    assert code not in server.rooms
+
+
+def test_leave_during_auction_keeps_team_and_rejoin_restores(clients):
+    owner, guest = clients(), clients()
+    code = owner.emit('create_room', {'name': 'A', 'team': 'A'}, callback=True)['room_code']
+    g = guest.emit('join_room', {'room_code': code, 'name': 'b', 'team': 'B'}, callback=True)
+    owner.emit('start_auction', {}, callback=True)
+    guest.emit('leave_room', {}, callback=True)
+    room = server.rooms[code]
+    assert g['team_id'] in room.teams and not room.teams[g['team_id']]['connected']
+    back = clients().emit('rejoin', {'room_code': code, 'token': g['token']}, callback=True)
+    assert back['ok'] and back['state']['phase'] == 'bidding'
+
+
+def test_rejoin_from_second_socket_takes_over_seat(clients):
+    first = clients()
+    ack = first.emit('create_room', {'name': 'A', 'team': 'A'}, callback=True)
+    second = clients()
+    assert second.emit('rejoin', {'room_code': ack['room_code'], 'token': ack['token']}, callback=True)['ok']
+    # The old socket no longer controls the seat
+    assert not first.emit('start_auction', {}, callback=True)['ok']
+    assert second.emit('start_auction', {}, callback=True)['ok']
+
+
+def test_guest_cannot_drive_auction_over_socket(clients):
+    owner, guest = clients(), clients()
+    code = owner.emit('create_room', {'name': 'A', 'team': 'A'}, callback=True)['room_code']
+    guest.emit('join_room', {'room_code': code, 'name': 'b', 'team': 'B'}, callback=True)
+    assert not guest.emit('update_settings', {'squad_size': 20}, callback=True)['ok']
+    owner.emit('start_auction', {}, callback=True)
+    for action in ('pause', 'sell_now', 'skip_player', 'skip_batch', 'end'):
+        assert not guest.emit('owner_action', {'action': action}, callback=True)['ok']
+    assert server.rooms[code].phase == 'bidding'
+
+
+def test_state_versions_increase(clients):
+    owner, guest = clients(), clients()
+    code = owner.emit('create_room', {'name': 'A', 'team': 'A'}, callback=True)['room_code']
+    guest.emit('join_room', {'room_code': code, 'name': 'b', 'team': 'B'}, callback=True)
+    owner.emit('start_auction', {}, callback=True)
+    owner.emit('owner_action', {'action': 'pause'}, callback=True)
+    owner.emit('owner_action', {'action': 'resume'}, callback=True)
+    versions = [e['args'][0]['v'] for e in guest.get_received() if e['name'] == 'state']
+    assert versions == sorted(versions) and len(set(versions)) == len(versions)
+
+
+def test_cleanup_removes_idle_and_finished_rooms():
+    server.rooms.clear()
+    idle, done, live = Room('IDLE1', make_players()), Room('DONE1', make_players()), Room('LIVE1', make_players())
+    for r in (idle, done, live):
+        server.rooms[r.code] = r
+    t = idle.add_team('a', 'A', 's1'); t['connected'] = False
+    idle.last_active = 0
+    done.add_team('b', 'B', 's2'); done.phase = 'finished'; done.last_active = 0
+    live.add_team('c', 'C', 's3'); live.last_active = 0
+    server.cleanup_rooms(server.FINISHED_ROOM_TTL + 1)
+    assert set(server.rooms) == {'LIVE1'}
+
+
+# ---------------------------------------------------------------- room logic edge cases
+def test_skip_player_discards_bids_and_keeps_purse():
+    room, (a, b) = room_with_teams()
+    lot = started(room, a)
+    room.bid(b['id'], lot['lot_id'], room.pool[lot['pid']]['base'], 1)
+    room.owner_action(a['id'], 'skip_player', 2)
+    assert room.phase == 'sold_pause' and not room.last_result['sold']
+    assert room.purse_left(b) == 100 * 100 and not b['squad']
+
+
+def test_end_mid_lot_moves_player_to_unsold():
+    room, (a, b) = room_with_teams()
+    lot = started(room, a)
+    room.owner_action(a['id'], 'end', 1)
+    assert room.phase == 'finished' and lot['pid'] in room.unsold
+    assert 'stats' in room.snapshot(1) and 'unsold' in room.snapshot(1)
+
+
+def test_unaffordable_players_are_passed_over():
+    players = [{'name': 'Star', 'overall': 95, 'role': 'Batsman', 'nationality': 'X'},
+               {'name': 'Cheap', 'overall': 50, 'role': 'Bowler', 'nationality': 'X'}]
+    room, (a, b) = room_with_teams(players=players, auction_order='skill_desc')
+    for t in (a, b):
+        t['squad'] = [{'price': 100 * 100 - 60}]   # 60 L left each
+    room.start(a['id'], 0)
+    assert room.pool[room.lot['pid']]['name'] == 'Cheap'
+    assert any(room.pool[pid]['name'] == 'Star' for pid in room.unsold)
+
+
+@pytest.mark.parametrize('seed', range(25))
+def test_random_auctions_keep_invariants(seed):
+    """Simulate whole auctions with random bids/owner actions; check the books always balance."""
+    import random as rnd
+    rng = rnd.Random(seed)
+    server.random.seed(seed)
+    pool = [{'name': f'P{i}', 'overall': rng.randint(45, 99), 'role': rng.choice(['Bat', 'Bowl', 'AR', 'WK']),
+             'nationality': 'X'} for i in range(rng.randint(5, 40))]
+    room = Room('FUZZ1', pool)
+    room.settings.update(squad_size=rng.randint(5, 8), team_purse=rng.choice([50, 90, 100]),
+                         auction_order=rng.choice(['tiered', 'tiered_skill', 'random', 'skill_desc']))
+    teams = [room.add_team(f'u{i}', f'T{i}', f's{i}') for i in range(rng.randint(2, 6))]
+    now = 0.0
+    room.start(teams[0]['id'], now)
+    for _ in range(3000):
+        if room.phase == 'finished':
+            break
+        now += rng.choice([0.1, 0.5, 1, 3, 25])
+        roll = rng.random()
+        try:
+            if roll < 0.7 and room.phase == 'bidding':
+                t = rng.choice(teams)
+                opts = room.next_valid_bids(t) or [rng.randint(0, 5000)]
+                room.bid(t['id'], room.lot['lot_id'] if rng.random() < .95 else -1, rng.choice(opts), now)
+            elif roll < 0.74:
+                room.owner_action(teams[0]['id'], rng.choice(['pause', 'resume', 'sell_now', 'skip_player', 'skip_batch', 'next_batch']), now)
+        except AuctionError:
+            pass
+        room.tick(now)
+        # invariants
+        owned = [p['pid'] for t in teams for p in t['squad']]
+        assert len(owned) == len(set(owned)), 'player in two squads'
+        for t in teams:
+            assert room.purse_left(t) >= 0
+            assert len(t['squad']) <= room.settings['squad_size']
+        queued = [pid for b in room.batches for pid in b['queue']]
+        current = [room.lot['pid']] if room.lot else []
+        accounted = owned + room.unsold + queued + current
+        assert len(accounted) == len(set(accounted)) == len(room.pool), 'player lost or duplicated'
+    else:
+        room.owner_action(teams[0]['id'], 'end', now)
+    assert room.phase == 'finished'
+    snap = room.snapshot(now)
+    assert snap['stats']['total_sold'] == sum(len(t['squad']) for t in teams)
